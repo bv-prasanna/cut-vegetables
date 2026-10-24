@@ -1,0 +1,13 @@
+{
+  "name": "freshprep-platform",
+  "private": true,
+  "packageManager": "npm@10",
+  "scripts": {
+    "dev": "npm --workspace apps/api run dev",
+    "test": "npm --workspace apps/api test",
+    "typecheck": "npm --workspace apps/api run typecheck"
+  },
+  "workspaces": [
+    "apps/*"
+  ]
+}
