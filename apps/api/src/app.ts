@@ -13,7 +13,7 @@ const orderSchema=z.object({
 type Order=z.infer<typeof orderSchema>&{totalPaise:number;createdAt:string};
 export function createApp() {
  const app=new Hono();
- app.use('*',cors({origin:'http://localhost:5173'}));
+ app.use('*',cors({origin:['http://localhost:5173','http://127.0.0.1:5173']}));
  const variants=new Map<string,Variant>();
  const slots=new Map<string,Slot>();
  const rules=new Map<string,z.infer<typeof recurrenceSchema>&{id:string}>();
