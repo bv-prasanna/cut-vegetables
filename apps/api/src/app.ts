@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { allowDevelopmentApi } from './dev-guard.js';
 import { cors } from 'hono/cors';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
@@ -13,6 +14,7 @@ const orderSchema=z.object({
 type Order=z.infer<typeof orderSchema>&{totalPaise:number;createdAt:string};
 export function createApp() {
  const app=new Hono();
+ app.use('/dev/*',async(c,next)=>{if(!allowDevelopmentApi(process.env.NODE_ENV))return c.json({error:'Development API disabled'},404);await next();});
  app.use('*',cors({origin:['http://localhost:5173','http://127.0.0.1:5173']}));
  const variants=new Map<string,Variant>();
  const slots=new Map<string,Slot>();
