@@ -8,7 +8,9 @@
     "start": "tsx src/index.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "dev:pg": "tsx watch src/production-index.ts"
+    "dev:pg": "tsx watch src/production-index.ts",
+    "db:migrate": "tsx src/db-migrate.ts",
+    "db:bootstrap": "tsx src/bootstrap-admin.ts"
   },
   "dependencies": {
     "hono": "^4.6.0",
