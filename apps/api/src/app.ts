@@ -20,6 +20,33 @@ export function createApp() {
  const slots=new Map<string,Slot>();
  const rules=new Map<string,z.infer<typeof recurrenceSchema>&{id:string}>();
  const orders=new Map<string,Order>();
+ const slideSchema=z.object({id:z.string().min(1),eyebrow:z.string().trim().min(1).max(80),headline:z.string().trim().min(1).max(180),description:z.string().trim().max(300),imageUrl:z.string().url(),active:z.boolean().default(true),sortOrder:z.number().int().min(0).max(10000).default(0)});
+ const announcementSchema=z.object({id:z.string().min(1),title:z.string().trim().min(1).max(100),body:z.string().trim().min(1).max(500),active:z.boolean().default(true)});
+ const slides=new Map<string,z.infer<typeof slideSchema>>();
+ const announcements=new Map<string,z.infer<typeof announcementSchema>>();
+ app.get('/home/slides',c=>c.json([...slides.values()].filter(v=>v.active).sort((a,b)=>a.sortOrder-b.sortOrder)));
+ app.get('/home/announcements',c=>c.json([...announcements.values()].filter(v=>v.active)));
+ app.get('/dev/admin/slides',c=>c.json([...slides.values()].sort((a,b)=>a.sortOrder-b.sortOrder)));
+ app.post('/dev/admin/slides',zValidator('json',slideSchema),c=>{
+  const data=c.req.valid('json');
+  if(slides.has(data.id))return c.json({error:'Duplicate slide ID'},409);
+  slides.set(data.id,data);return c.json(data,201);
+ });
+ app.delete('/dev/admin/slides/:id',c=>{
+  const found=slides.delete(c.req.param('id'));
+  return found?c.json({deleted:true}):c.json({error:'Slide not found'},404);
+ });
+ app.get('/dev/admin/announcements',c=>c.json([...announcements.values()]));
+ app.post('/dev/admin/announcements',zValidator('json',announcementSchema),c=>{
+  const data=c.req.valid('json');
+  if(announcements.has(data.id))return c.json({error:'Duplicate announcement ID'},409);
+  announcements.set(data.id,data);return c.json(data,201);
+ });
+ app.delete('/dev/admin/announcements/:id',c=>{
+  const found=announcements.delete(c.req.param('id'));
+  return found?c.json({deleted:true}):c.json({error:'Announcement not found'},404);
+ });
+
  app.get('/health',c=>c.json({status:'ok',mode:'LOCAL_DEVELOPMENT_ONLY'}));
  app.get('/catalog/variants',c=>c.json([...variants.values()].filter(v=>v.active)));
  app.get('/delivery/slots',c=>c.json([...slots.values()].filter(v=>v.active)));
