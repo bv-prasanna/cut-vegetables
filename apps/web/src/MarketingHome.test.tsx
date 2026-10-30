@@ -20,6 +20,9 @@ describe('approved FreshPrep storefront',()=>{
   const html=markup();expect(html).toContain('Closes previous day at 23:00');
  });
  it('makes illustrative product cards explicit when catalogue is empty',()=>{
-  const html=markup([]);expect(html).toContain('Example');expect(html).toContain('Price on request');
+  const html=markup([]);
+  expect(html).toContain('Illustrative photo');
+  expect(html).toContain('Price on request');
+  expect((html.match(/class="fp-sample-mark"/g)||[])).toHaveLength(4);
  });
 });
