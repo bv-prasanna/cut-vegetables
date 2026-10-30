@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { buildDemoCatalogue, buildDemoSlots } from './demo-catalog.js';
 import { nextOrderState, orderStates, type OrderState } from './workflow.js';
 import { permissions } from './authorization.js';
+import { geoEventSchema } from './geo-events.js';
 import { allowDevelopmentApi } from './dev-guard.js';
 import { cors } from 'hono/cors';
 import { zValidator } from '@hono/zod-validator';
@@ -12,7 +13,8 @@ import { isSlotBookable, validateOrderQuantities, recurrenceRunsOn } from './sch
 const orderSchema=z.object({
   id:z.string().min(1),slotId:z.string().min(1),
   deliveryDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  items:z.array(z.object({variantId:z.string().min(1),grams:z.number().int().positive()})).min(1)
+  items:z.array(z.object({variantId:z.string().min(1),grams:z.number().int().positive()})).min(1),
+  event:geoEventSchema.optional()
 });
 type Order=z.infer<typeof orderSchema>&{totalPaise:number;createdAt:string;state:OrderState};
 export function createApp() {
@@ -23,6 +25,11 @@ export function createApp() {
  const slots=new Map<string,Slot>();
  const rules=new Map<string,z.infer<typeof recurrenceSchema>&{id:string}>();
  const orders=new Map<string,Order>();
+ const auditEvents:Array<{id:string;eventType:string;subjectId:string;location:unknown;occurredAt:string}>=[];
+ function audit(eventType:string,subjectId:string,location:unknown={source:'UNAVAILABLE',unavailableReason:'No device position provided in local demo',consentStatus:'NOT_REQUESTED'}){
+  auditEvents.push({id:String(auditEvents.length+1),eventType,subjectId,location,occurredAt:new Date().toISOString()});
+ }
+ app.get('/dev/admin/events',c=>c.json(auditEvents.slice(-100).reverse()));
  // Seed only the loopback-bound demonstration API, never the production Postgres API.
  if(process.env.NODE_ENV!=='production'&&process.env.FRESHPREP_DEMO_SEED!=='false'){
   for(const variant of buildDemoCatalogue()) variants.set(variant.id,variant);
@@ -53,7 +60,7 @@ export function createApp() {
  app.patch('/dev/admin/orders/:id/state',zValidator('json',z.object({state:z.enum(orderStates)})),c=>{
   const order=orders.get(c.req.param('id'));
   if(!order)return c.json({error:'Order not found'},404);
-  try{order.state=nextOrderState(order.state,c.req.valid('json').state);return c.json(order);}
+  try{order.state=nextOrderState(order.state,c.req.valid('json').state);audit('ORDER_STATE_CHANGED',order.id);return c.json(order);}
   catch{return c.json({error:'Invalid state transition'},409);}
  });
 
@@ -67,7 +74,7 @@ export function createApp() {
  app.post('/dev/admin/slides',zValidator('json',slideSchema),c=>{
   const data=c.req.valid('json');
   if(slides.has(data.id))return c.json({error:'Duplicate slide ID'},409);
-  slides.set(data.id,data);return c.json(data,201);
+  slides.set(data.id,data);audit('HERO_SLIDE_CREATED',data.id);return c.json(data,201);
  });
  app.delete('/dev/admin/slides/:id',c=>{
   const found=slides.delete(c.req.param('id'));
@@ -77,7 +84,7 @@ export function createApp() {
  app.post('/dev/admin/announcements',zValidator('json',announcementSchema),c=>{
   const data=c.req.valid('json');
   if(announcements.has(data.id))return c.json({error:'Duplicate announcement ID'},409);
-  announcements.set(data.id,data);return c.json(data,201);
+  announcements.set(data.id,data);audit('ANNOUNCEMENT_CREATED',data.id);return c.json(data,201);
  });
  app.delete('/dev/admin/announcements/:id',c=>{
   const found=announcements.delete(c.req.param('id'));
@@ -90,18 +97,18 @@ export function createApp() {
  // Development-only, no authentication. Bind the server to loopback (index.ts).
  app.post('/dev/admin/variants',zValidator('json',variantSchema),c=>{
    const v=c.req.valid('json');if(variants.has(v.id))return c.json({error:'Duplicate variant'},409);
-   variants.set(v.id,v);return c.json(v,201);
+   variants.set(v.id,v);audit('PRODUCT_VARIANT_CREATED',v.id);return c.json(v,201);
  });
  app.post('/dev/admin/slots',zValidator('json',slotSchema),c=>{
    const v=c.req.valid('json');if(slots.has(v.id))return c.json({error:'Duplicate slot'},409);
-   slots.set(v.id,v);return c.json(v,201);
+   slots.set(v.id,v);audit('DELIVERY_SLOT_CREATED',v.id);return c.json(v,201);
  });
  app.post('/dev/recurrences',zValidator('json',z.intersection(z.object({id:z.string().min(1)}),recurrenceSchema)),c=>{
    const v=c.req.valid('json');if(rules.has(v.id))return c.json({error:'Duplicate schedule'},409);
    if(!slots.has(v.slotId))return c.json({error:'Unknown slot'},422);
    const errors=validateOrderQuantities(v.items,[...variants.values()]);
    if(errors.length)return c.json({errors},422);
-   rules.set(v.id,v);return c.json(v,201);
+   rules.set(v.id,v);audit('RECURRING_SCHEDULE_CREATED',v.id);return c.json(v,201);
  });
  app.get('/dev/recurrences',c=>c.json([...rules.values()]));
  app.get('/dev/recurrences/:id/dates',c=>{
@@ -124,7 +131,7 @@ export function createApp() {
    if(errors.length)return c.json({errors},422);
    if([...orders.values()].filter(o=>o.slotId===v.slotId&&o.deliveryDate===v.deliveryDate).length>=slot.capacityOrders)return c.json({error:'Slot full'},409);
    const totalPaise=v.items.reduce((sum,item)=>sum+Math.round((variants.get(item.variantId)?.pricePaisePerKg||0)*item.grams/1000),0);
-   const order:Order={...v,totalPaise,createdAt:new Date().toISOString(),state:'CONFIRMED'};orders.set(v.id,order);return c.json(order,201);
+   const order:Order={...v,totalPaise,createdAt:new Date().toISOString(),state:'CONFIRMED'};orders.set(v.id,order);audit('ORDER_CREATED',v.id,v.event?.location);return c.json(order,201);
  });
  app.get('/delivery/slots/:id/availability',c=>{
    const slot=slots.get(c.req.param('id'));if(!slot)return c.json({error:'Unknown slot'},404);

@@ -5,9 +5,12 @@
   "scripts": {
     "dev": "npm --workspace apps/api run dev",
     "test": "npm --workspace apps/api test",
-    "typecheck": "npm --workspace apps/api run typecheck"
+    "typecheck": "npm --workspace apps/api run typecheck",
+    "web:test": "npm run test --workspace @freshprep/web",
+    "web:build": "npm run build --workspace @freshprep/web"
   },
   "workspaces": [
-    "apps/*"
+    "apps/api",
+    "apps/web"
   ]
 }
