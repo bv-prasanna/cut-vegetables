@@ -8,7 +8,7 @@ export async function bootstrap(pool:Pool,organizationName:string,email:string,p
   await client.query('BEGIN');
   const existing=await client.query('SELECT 1 FROM memberships WHERE role=$1 LIMIT 1',['SUPERADMIN']);
   if(existing.rowCount)throw new Error('Superadmin already exists; bootstrap disabled');
-  const org=await client.query('INSERT INTO organizations(name,kind) VALUES($1,'PRODUCER') RETURNING id',[organizationName.trim()]);
+  const org=await client.query('INSERT INTO organizations(name,kind) VALUES($1,$2) RETURNING id',[organizationName.trim(),'PRODUCER']);
   const user=await client.query('INSERT INTO users(email,password_hash) VALUES($1,$2) RETURNING id',[email.toLowerCase().trim(),passwordHash(password)]);
   await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3)',[org.rows[0].id,user.rows[0].id,'SUPERADMIN']);
   await client.query('COMMIT');
