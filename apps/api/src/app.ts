@@ -1,4 +1,7 @@
 import { Hono } from 'hono';
+import { buildDemoCatalogue, buildDemoSlots } from './demo-catalog.js';
+import { nextOrderState, orderStates, type OrderState } from './workflow.js';
+import { permissions } from './authorization.js';
 import { allowDevelopmentApi } from './dev-guard.js';
 import { cors } from 'hono/cors';
 import { zValidator } from '@hono/zod-validator';
@@ -11,7 +14,7 @@ const orderSchema=z.object({
   deliveryDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   items:z.array(z.object({variantId:z.string().min(1),grams:z.number().int().positive()})).min(1)
 });
-type Order=z.infer<typeof orderSchema>&{totalPaise:number;createdAt:string};
+type Order=z.infer<typeof orderSchema>&{totalPaise:number;createdAt:string;state:OrderState};
 export function createApp() {
  const app=new Hono();
  app.use('/dev/*',async(c,next)=>{if(!allowDevelopmentApi(process.env.NODE_ENV))return c.json({error:'Development API disabled'},404);await next();});
@@ -20,6 +23,40 @@ export function createApp() {
  const slots=new Map<string,Slot>();
  const rules=new Map<string,z.infer<typeof recurrenceSchema>&{id:string}>();
  const orders=new Map<string,Order>();
+ // Seed only the loopback-bound demonstration API, never the production Postgres API.
+ if(process.env.NODE_ENV!=='production'&&process.env.FRESHPREP_DEMO_SEED!=='false'){
+  for(const variant of buildDemoCatalogue()) variants.set(variant.id,variant);
+  for(const slot of buildDemoSlots()) slots.set(slot.id,slot);
+ }
+ app.get('/catalog/demo-info',c=>c.json({
+  demo:true,sampleProducts:[...variants.keys()].filter(id=>id.startsWith('sample-')).length,
+  notice:'Illustrative catalogue prices and images. No production product photography or price commitments.'
+ }));
+ app.get('/dev/admin/dashboard',c=>{
+  const catalog=[...variants.values()],bookings=[...orders.values()],recurring=[...rules.values()];
+  const stateCounts=Object.fromEntries(orderStates.map(state=>[state,bookings.filter(order=>order.state===state).length]));
+  const preparation=Object.entries(catalog.reduce<Record<string,number>>((acc,item)=>(acc[item.preparation]=(acc[item.preparation]||0)+1,acc),{}))
+   .map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
+  const slotLoad=[...slots.values()].map(slot=>({id:slot.id,label:slot.label,capacityOrders:slot.capacityOrders,
+   reserved:bookings.filter(o=>o.slotId===slot.id&&o.state!=='CANCELLED').length}));
+  return c.json({
+   demo:true,
+   metrics:{variants:catalog.length,vegetables:new Set(catalog.map(p=>p.vegetable)).size,
+    orders:bookings.length,recurringSchedules:recurring.length,deliverySlots:slots.size,
+    demoOrderValuePaise:bookings.filter(o=>o.state!=='CANCELLED').reduce((sum,o)=>sum+o.totalPaise,0)},
+   stateCounts,preparation,slotLoad,
+   recentOrders:bookings.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,12),
+   schedules:recurring.slice(0,20)
+  });
+ });
+ app.get('/dev/admin/roles',c=>c.json(Object.entries(permissions).map(([role,grants])=>({role,permissions:grants}))));
+ app.patch('/dev/admin/orders/:id/state',zValidator('json',z.object({state:z.enum(orderStates)})),c=>{
+  const order=orders.get(c.req.param('id'));
+  if(!order)return c.json({error:'Order not found'},404);
+  try{order.state=nextOrderState(order.state,c.req.valid('json').state);return c.json(order);}
+  catch{return c.json({error:'Invalid state transition'},409);}
+ });
+
  const slideSchema=z.object({id:z.string().min(1),eyebrow:z.string().trim().min(1).max(80),headline:z.string().trim().min(1).max(180),description:z.string().trim().max(300),imageUrl:z.string().url(),active:z.boolean().default(true),sortOrder:z.number().int().min(0).max(10000).default(0)});
  const announcementSchema=z.object({id:z.string().min(1),title:z.string().trim().min(1).max(100),body:z.string().trim().min(1).max(500),active:z.boolean().default(true)});
  const slides=new Map<string,z.infer<typeof slideSchema>>();
@@ -87,7 +124,7 @@ export function createApp() {
    if(errors.length)return c.json({errors},422);
    if([...orders.values()].filter(o=>o.slotId===v.slotId&&o.deliveryDate===v.deliveryDate).length>=slot.capacityOrders)return c.json({error:'Slot full'},409);
    const totalPaise=v.items.reduce((sum,item)=>sum+Math.round((variants.get(item.variantId)?.pricePaisePerKg||0)*item.grams/1000),0);
-   const order={...v,totalPaise,createdAt:new Date().toISOString()};orders.set(v.id,order);return c.json(order,201);
+   const order:Order={...v,totalPaise,createdAt:new Date().toISOString(),state:'CONFIRMED'};orders.set(v.id,order);return c.json(order,201);
  });
  app.get('/delivery/slots/:id/availability',c=>{
    const slot=slots.get(c.req.param('id'));if(!slot)return c.json({error:'Unknown slot'},404);
