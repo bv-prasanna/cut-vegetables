@@ -52,8 +52,19 @@ export default function StaffBoards({slots}:Props){
   }catch(e){setError(e instanceof Error?e.message:'Unable to change stage');}
   finally{setBusy(false);}
  }
- const relevantOrders=selected?packing.filter(o=>o.deliveryDate===plan.find(p=>p.variantId===selected)?.deliveryDate &&
-   o.lines.some(line=>line.variantId===selected)&&(!slot||o.slotId===slot)):packing;
+ const [selectedDate,selectedSlot,selectedVariant]=selected.split('|');
+ const relevantOrders=selected?packing.filter(o=>o.deliveryDate===selectedDate&&o.slotId===selectedSlot&&
+   o.lines.some(line=>line.variantId===selectedVariant)):packing;
+ const dailyTotals=useMemo(()=>{
+  const map=new Map<string,{key:string;date:string;description:string;total:number;slots:Map<string,number>}>();
+  for(const p of plan){
+   const key=p.deliveryDate+'|'+p.variantId;
+   let v=map.get(key);
+   if(!v){v={key,date:p.deliveryDate,description:p.vegetable+' · '+p.preparation+' · '+p.size,total:0,slots:new Map()};map.set(key,v);}
+   v.total+=p.grams;v.slots.set(p.slotLabel,(v.slots.get(p.slotLabel)||0)+p.grams);
+  }
+  return [...map.values()].sort((a,b)=>a.date.localeCompare(b.date)||a.description.localeCompare(b.description));
+ },[plan]);
  return <section className="staff-workspaces">
  <header className="staff-heading"><div><span className="staff-kicker">FRESHPREP · OPERATIONS</span><h1>Daily Production & Fulfilment</h1><p>Slot-wise cutting requirements, order-wise packing and delivery handover.</p></div><button onClick={()=>void refresh()} disabled={busy}>↻ Refresh board</button></header>
  <div className="staff-warning" role="note"><strong>Local demonstration:</strong> The status buttons below simulate staff steps without verified login, physical QC, measured packing or GPS proof. The PostgreSQL operational APIs require authenticated roles and database records.</div>
@@ -61,8 +72,12 @@ export default function StaffBoards({slots}:Props){
  <nav className="staff-roles" aria-label="Role-specific operational dashboards">{roles.map(r=><button className={role===r?'active':''} key={r} onClick={()=>{setRole(r);setSelected('')}}>{r==='CUTTER'?'🔪 Cutter':r==='PACKER'?'📦 Packing':r==='DELIVERY'?'🚚 Driver':r==='DISPATCH'?'📋 Dispatch':'✅ QC'}</button>)}</nav>
  <div className="staff-filters"><label>Delivery date<input type="date" value={date} onChange={e=>{setDate(e.target.value);setSelected('')}}/></label><button className="staff-small" onClick={()=>{setDate('');setSlot('')}}>All dates / slots</button><label>Delivery slot<select value={slot} onChange={e=>setSlot(e.target.value)}><option value="">All slots consolidated</option>{slots.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label><span>{busy?'Updating…':role==='CUTTER'?plan.length+' preparation groups':queue.length+' orders in queue'}</span></div>
  {role==='CUTTER'&&<><div className="staff-summary"><article><small>Vegetable preparation groups</small><strong>{plan.length}</strong></article><article><small>Total preparation required</small><strong>{kg(totalKg)}</strong></article><article><small>Customer orders</small><strong>{new Set(packing.map(o=>o.orderId)).size}</strong></article><article><small>Delivery slots</small><strong>{new Set(plan.map(p=>p.slotId+'|'+p.deliveryDate)).size}</strong></article></div>
+ <div className="staff-panel"><h2>Daily vegetable totals — all delivery slots</h2>
+ <p>The total amount to prepare for each exact cutting variant, with slot-specific allocation shown alongside.</p>
+ <div className="staff-table-wrap"><table><thead><tr><th>Date</th><th>Vegetable / cut</th><th>All slots total</th><th>Slot-wise breakdown</th></tr></thead><tbody>{dailyTotals.map(r=><tr key={r.key}><td>{r.date}</td><td><b>{r.description}</b></td><td><strong>{kg(r.total)}</strong></td><td>{[...r.slots.entries()].map(([label,grams])=>label+': '+kg(grams)).join(' · ')}</td></tr>)}</tbody></table></div>
+ </div>
  <div className="staff-panel"><h2>Consolidated Cutting Plan</h2><p>Each line combines all accepted customer orders for the same delivery date, slot, vegetable, preparation and exact size. Cancelled orders are excluded.</p>
- <div className="staff-table-wrap"><table><thead><tr><th>Delivery date</th><th>Delivery window</th><th>Vegetable</th><th>Preparation</th><th>Size</th><th>Required</th><th>Orders</th><th>In progress</th><th>Details</th></tr></thead><tbody>{plan.map(p=><tr key={p.deliveryDate+p.slotId+p.variantId}><td>{p.deliveryDate}</td><td>{p.slotLabel}</td><td><b>{p.vegetable}</b></td><td>{p.preparation}</td><td>{p.size}</td><td><strong>{kg(p.grams)}</strong></td><td>{p.orderCount}</td><td>{p.startedOrders}</td><td><button className="staff-small" onClick={()=>setSelected(old=>old===p.variantId?'':p.variantId)}>Orders</button></td></tr>)}</tbody></table></div>{!plan.length&&<p className="staff-empty">No orders have been placed for the selected delivery date and window.</p>}
+ <div className="staff-table-wrap"><table><thead><tr><th>Delivery date</th><th>Delivery window</th><th>Vegetable</th><th>Preparation</th><th>Size</th><th>Required</th><th>Orders</th><th>In progress</th><th>Details</th></tr></thead><tbody>{plan.map(p=><tr key={p.deliveryDate+p.slotId+p.variantId}><td>{p.deliveryDate}</td><td>{p.slotLabel}</td><td><b>{p.vegetable}</b></td><td>{p.preparation}</td><td>{p.size}</td><td><strong>{kg(p.grams)}</strong></td><td>{p.orderCount}</td><td>{p.startedOrders}</td><td><button className="staff-small" onClick={()=>setSelected(old=>old===p.deliveryDate+'|'+p.slotId+'|'+p.variantId?'':p.deliveryDate+'|'+p.slotId+'|'+p.variantId)}>Orders</button></td></tr>)}</tbody></table></div>{!plan.length&&<p className="staff-empty">No orders have been placed for the selected delivery date and window.</p>}
  </div></>}
  <div className="staff-panel"><h2>{role==='CUTTER'?'Order Drill-down':role==='QC'?'QC Review Queue':role==='PACKER'?'Order-wise Packing Queue':role==='DISPATCH'?'Ready-to-Dispatch Orders':'Delivery & Handover Queue'}</h2>
  <p>{role==='PACKER'?'Each order lists its precise products, preparation sizes and required packed weights. The real service calculates readiness from QC-approved batches and packed units.':role==='DELIVERY'?'Demo orders appear here; the authenticated driver dashboard shows only assigned runs and stops.':role==='CUTTER'?'Start cutting for individual orders after reviewing consolidated demand.':'Status updates are controlled by the prior workflow stage.'}</p>

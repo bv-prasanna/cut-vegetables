@@ -30,7 +30,9 @@ async function body<T extends z.ZodTypeAny>(c:Context<Env>,schema:T):Promise<z.i
  return result.data;
 }
 function idParam(c:Context<Env>):string{
- return uuid.parse(c.req.param('id'));
+ const result=uuid.safeParse(c.req.param('id'));
+ if(!result.success)throw new BusinessFailure(400,'Invalid resource identifier');
+ return result.data;
 }
 export function createOperationsRoutes(pool:Pool){
  const app=new Hono<Env>();

@@ -22,7 +22,7 @@ type Props = {
   onSetFrequency: (v: 'DAILY' | 'WEEKLY') => void;
   onSetWeekdays: (v: number[]) => void;
   onCatalogue: () => void; onRecurring: () => void;
-  onOrders: () => void; onAdmin: () => void;
+  onOrders: () => void; onAdmin: () => void; onStaff?: () => void;
   onSelectProduct: (v: StoreVariant) => void;
 };
 
@@ -70,7 +70,7 @@ function prettyCut(v:StoreVariant){return v.preparation.toLowerCase()+' '+String
 function clock(m:number){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
 function price(p:number){return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(p/100);}
 
-export default function MarketingHome({variants,slots,weekdays,onSetWeekdays,frequency,onSetFrequency,onCatalogue,onRecurring,onOrders,onAdmin,onSelectProduct}:Props){
+export default function MarketingHome({variants,slots,weekdays,onSetWeekdays,frequency,onSetFrequency,onCatalogue,onRecurring,onOrders,onAdmin,onStaff,onSelectProduct}:Props){
  const [slides,setSlides]=useState<Slide[]>(HERO_FALLBACK);
  const [active,setActive]=useState(0);
  const [notice,setNotice]=useState<string|null>(null);
@@ -94,7 +94,7 @@ export default function MarketingHome({variants,slots,weekdays,onSetWeekdays,fre
  return <div className="fp-site">
  <header className="fp-header"><div className="fp-header-inner">
    <button className="fp-wordmark" onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} aria-label="FreshPrep home"><span className="fp-leafmark"><I name="leaf" size={34}/></span><span className="fp-wordmark-text"><b>FreshPrep</b><small>Veggies</small></span><span className="fp-brand-tag">READY FOR<br/>GREAT KITCHENS</span></button>
-   <nav className="fp-top-nav" aria-label="Main navigation"><button className="fp-nav-active" onClick={()=>window.scrollTo({top:0,behavior:'smooth'})}>Home</button><button onClick={onCatalogue}>Catalogue</button><button onClick={onRecurring}>Recurring Orders</button><button onClick={()=>document.getElementById('fp-delivery')?.scrollIntoView({behavior:'smooth'})}>Delivery Slots</button><button onClick={()=>document.getElementById('fp-promos')?.scrollIntoView({behavior:'smooth'})}>Offers</button><button onClick={()=>document.getElementById('fp-about')?.scrollIntoView({behavior:'smooth'})}>About</button></nav>
+   <nav className="fp-top-nav" aria-label="Main navigation"><button className="fp-nav-active" onClick={()=>window.scrollTo({top:0,behavior:'smooth'})}>Home</button><button onClick={onCatalogue}>Catalogue</button><button onClick={onRecurring}>Recurring Orders</button><button onClick={onStaff||onAdmin}>Staff Boards</button><button onClick={()=>document.getElementById('fp-delivery')?.scrollIntoView({behavior:'smooth'})}>Delivery Slots</button><button onClick={()=>document.getElementById('fp-promos')?.scrollIntoView({behavior:'smooth'})}>Offers</button><button onClick={()=>document.getElementById('fp-about')?.scrollIntoView({behavior:'smooth'})}>About</button></nav>
    <button className="fp-login" onClick={onCatalogue}>Browse / Get Started <I name="arrow" size={15}/></button>
  </div></header>
  <section className="fp-hero" aria-label="FreshPrep promotions">
@@ -118,6 +118,6 @@ export default function MarketingHome({variants,slots,weekdays,onSetWeekdays,fre
  <section className="fp-promotion-row" id="fp-promos"><button className="fp-offer-card fp-offer-one" onClick={onCatalogue}><I name="tag" size={31}/><span><small>BUSINESS PRICING</small><b>Ask about repeat-order pricing</b><span>Customer-specific rates for regular kitchens.</span></span><I name="arrow" size={18}/></button><button className="fp-offer-card fp-offer-two" onClick={onOrders}><I name="gift" size={31}/><span><small>BULK ORDER PLANNING</small><b>Plan large catering requirements</b><span>Choose custom cuts and delivery schedules.</span></span><I name="arrow" size={18}/></button><div className="fp-offer-card fp-offer-three"><I name="star" size={33}/><span><small>PLANNED FEATURE</small><b>FreshPrep Rewards</b><span>Loyalty points and redemption coming later.</span></span></div></section>
  <section className="fp-why" id="fp-about"><h2>Why Professional Kitchens Choose FreshPrep Veggies</h2><div className="fp-reasons"><div><span><I name="shield" size={25}/></span><div><b>Hygiene-first Processing</b><p>Designed for traceable cleaning, packing and QC.</p></div></div><div><span><I name="knife" size={25}/></span><div><b>Exact Cut Sizes</b><p>Consistent specifications for your recipes.</p></div></div><div><span><I name="truck" size={25}/></span><div><b>Planned Delivery</b><p>Choose the slot that suits your kitchen.</p></div></div><div><span><I name="box" size={25}/></span><div><b>Batch Traceability</b><p>Raw-lot to delivery tracking in the roadmap.</p></div></div></div></section>
  </div>
- <footer className="fp-footer"><div className="fp-footer-inner"><div className="fp-footer-brand"><I name="leaf" size={26}/><span><b>FreshPrep Veggies</b><small>READY FOR GREAT KITCHENS</small></span></div><div className="fp-footer-links"><button onClick={onCatalogue}>Catalogue</button><button onClick={onRecurring}>Recurring Orders</button><button onClick={()=>document.getElementById('fp-delivery')?.scrollIntoView({behavior:'smooth'})}>Delivery Slots</button><button onClick={onAdmin}>Operations Demo</button></div><div className="fp-footer-place"><I name="location" size={17}/> Bengaluru, Karnataka</div></div><div className="fp-footer-bottom">FreshPrep Veggies · Development preview · Product prices, claims and contact details must be confirmed before launch</div></footer>
+ <footer className="fp-footer"><div className="fp-footer-inner"><div className="fp-footer-brand"><I name="leaf" size={26}/><span><b>FreshPrep Veggies</b><small>READY FOR GREAT KITCHENS</small></span></div><div className="fp-footer-links"><button onClick={onCatalogue}>Catalogue</button><button onClick={onRecurring}>Recurring Orders</button><button onClick={()=>document.getElementById('fp-delivery')?.scrollIntoView({behavior:'smooth'})}>Delivery Slots</button><button onClick={onStaff||onAdmin}>Staff Boards</button><button onClick={onAdmin}>Admin Demo</button></div><div className="fp-footer-place"><I name="location" size={17}/> Bengaluru, Karnataka</div></div><div className="fp-footer-bottom">FreshPrep Veggies · Development preview · Product prices, claims and contact details must be confirmed before launch</div></footer>
  </div>;
 }

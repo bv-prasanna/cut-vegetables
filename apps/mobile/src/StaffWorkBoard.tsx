@@ -50,6 +50,17 @@ export default function StaffWorkBoard({role,apiBase}:Props){
  useEffect(()=>{void refresh()},[refresh]);
  const slots=useMemo(()=>[...new Map(plan.map(p=>[p.slotId,p.slotLabel])).entries()],[plan]);
  const list=effective==='DELIVERY'||effective==='DISPATCH'?delivery:packing;
+ const dailyTotals=useMemo(()=>{
+  const totals=new Map<string,{date:string;description:string;grams:number;slots:Map<string,number>}>();
+  for(const row of plan){
+   const key=row.deliveryDate+'|'+row.variantId;
+   let v=totals.get(key);
+   if(!v){v={date:row.deliveryDate,description:row.vegetable+' · '+row.preparation+' · '+row.size,grams:0,slots:new Map()};totals.set(key,v);}
+   v.grams+=row.grams;v.slots.set(row.slotLabel,(v.slots.get(row.slotLabel)||0)+row.grams);
+  }
+  return [...totals.values()].sort((a,b)=>a.date.localeCompare(b.date)||a.description.localeCompare(b.description));
+ },[plan]);
+
  async function advance(orderId:string){
   setBusy(true);
   try{
@@ -66,7 +77,7 @@ export default function StaffWorkBoard({role,apiBase}:Props){
  <View style={styles.filters}><TextInput style={styles.dateInput} value={date} onChangeText={setDate} placeholder="Delivery date YYYY-MM-DD"/><Pressable onPress={()=>{setDate('');setSlot('')}} style={styles.clear}><Text style={styles.clearText}>All dates</Text></Pressable></View>
  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.slotRow}><Pressable style={[styles.slot,slot===''&&styles.active]} onPress={()=>setSlot('')}><Text style={styles.slotText}>All Slots</Text></Pressable>{slots.map(([id,label])=><Pressable key={id} style={[styles.slot,slot===id&&styles.active]} onPress={()=>setSlot(id)}><Text style={styles.slotText}>{label}</Text></Pressable>)}</ScrollView>
  {busy&&<ActivityIndicator color="#175d3d"/>}{!!error&&<Text style={styles.error}>{error}</Text>}
- {effective==='CUTTER'&&<><Text style={styles.summary}>Total cutting required: {kg(plan.reduce((n,p)=>n+p.grams,0))}</Text>{plan.map(row=><View style={styles.card} key={row.deliveryDate+row.slotId+row.variantId}><Text style={styles.caption}>{row.deliveryDate} · {row.slotLabel}</Text><Text style={styles.item}>{row.vegetable} · {row.preparation.toLowerCase()} · {row.size}</Text><View style={styles.quantity}><Text style={styles.amount}>{kg(row.grams)}</Text><Text style={styles.caption}>{row.orderCount} orders</Text></View></View>)}</>}
+ {effective==='CUTTER'&&<><Text style={styles.heading}>Daily totals across all slots</Text>{dailyTotals.map(row=><View style={styles.card} key={row.date+'|'+row.description}><Text style={styles.caption}>{row.date}</Text><Text style={styles.item}>{row.description}</Text><Text style={styles.amount}>{kg(row.grams)}</Text>{[...row.slots.entries()].map(([label,grams])=><Text style={styles.caption} key={label}>{label}: {kg(grams)}</Text>)}</View>)}<Text style={styles.summary}>Total cutting required: {kg(plan.reduce((n,p)=>n+p.grams,0))}</Text>{plan.map(row=><View style={styles.card} key={row.deliveryDate+row.slotId+row.variantId}><Text style={styles.caption}>{row.deliveryDate} · {row.slotLabel}</Text><Text style={styles.item}>{row.vegetable} · {row.preparation.toLowerCase()} · {row.size}</Text><View style={styles.quantity}><Text style={styles.amount}>{kg(row.grams)}</Text><Text style={styles.caption}>{row.orderCount} orders</Text></View></View>)}</>}
  <Text style={styles.heading}>{effective==='CUTTER'?'Orders to start':effective==='PACKER'?'Packing list by customer order':effective==='DELIVERY'?'Orders for dispatch and delivery':'Order work queue'}</Text>
  {list.length===0&&!busy&&<Text style={styles.empty}>No accepted orders in this delivery window.</Text>}
  {list.map(o=><View style={styles.card} key={o.orderId}><Text style={styles.caption}>{o.deliveryDate} · {o.slotLabel}</Text><View style={styles.quantity}><Text style={styles.item}>Order {o.orderId.slice(0,10)}</Text><Text style={styles.stage}>{o.state.replaceAll('_',' ')}</Text></View>
