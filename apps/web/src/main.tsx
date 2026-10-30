@@ -4,10 +4,11 @@ import './style.css';
 import MarketingHome from './MarketingHome';
 import MarketingAdmin from './MarketingAdmin';
 import AdminDashboard from './AdminDashboard';
+import StaffBoards from './StaffBoards';
 type Variant={id:string;vegetable:string;preparation:string;size:{kind:string;value:string|number;unit?:string};imageUrl:string;pricePaisePerKg:number;minimumGrams:number;incrementGrams:number;active:boolean};
 type Slot={id:string;label:string;startMinute:number;endMinute:number;cutoffDayOffset:number;cutoffMinute:number;capacityOrders:number;active:boolean};
 type Order={id:string;deliveryDate:string;slotId:string;items:{variantId:string;grams:number}[];totalPaise:number;createdAt:string};
-type Page='overview'|'catalog'|'standing'|'orders'|'admin';
+type Page='overview'|'catalog'|'standing'|'orders'|'operations'|'admin';
 const CATEGORIES=['All','DICED','CHOPPED','SLICED','GRATED','SHREDDED','JULIENNE','PEELED'];
 const currency=(paise:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(paise/100);
 const pad=(n:number)=>String(n).padStart(2,'0');
@@ -43,11 +44,12 @@ function App(){
  const links:[Page,string,string][]=[['overview','◈','Dashboard'],['catalog','▦','Vegetable catalogue'],['standing','↻','Recurring orders'],['orders','▤','Orders'],['admin','⚙','Operations setup']];
  const isAdmin=page==='admin';
  return <div className="shell">
- <div className="workspace">{page!=='overview'&&<header className="fp-inner-header"><button className="fp-inner-logo" onClick={()=>setPage('overview')}><span>❧</span> FreshPrep <small>Veggies</small></button><nav aria-label="Workspace navigation"><button onClick={()=>setPage('overview')}>Home</button><button className={page==='catalog'?'selected':''} onClick={()=>setPage('catalog')}>Catalogue</button><button className={page==='standing'?'selected':''} onClick={()=>setPage('standing')}>Recurring Orders</button><button className={page==='orders'?'selected':''} onClick={()=>setPage('orders')}>Orders</button><button className={page==='admin'?'selected':''} onClick={()=>setPage('admin')}>Operations</button></nav><span className="fp-dev-label">LOCAL DEMO</span></header>}
+ <div className="workspace">{page!=='overview'&&<header className="fp-inner-header"><button className="fp-inner-logo" onClick={()=>setPage('overview')}><span>❧</span> FreshPrep <small>Veggies</small></button><nav aria-label="Workspace navigation"><button onClick={()=>setPage('overview')}>Home</button><button className={page==='catalog'?'selected':''} onClick={()=>setPage('catalog')}>Catalogue</button><button className={page==='standing'?'selected':''} onClick={()=>setPage('standing')}>Recurring Orders</button><button className={page==='orders'?'selected':''} onClick={()=>setPage('orders')}>Orders</button><button className={page==='operations'?'selected':''} onClick={()=>setPage('operations')}>Staff Boards</button><button className={page==='admin'?'selected':''} onClick={()=>setPage('admin')}>Admin</button></nav><span className="fp-dev-label">LOCAL DEMO</span></header>}
  <main className={page==='overview'?'main marketing-main':'main'}>
  
  {error&&<div role="alert" className="alert error"><strong>Something needs attention</strong><span>{error}</span><button onClick={()=>setError('')}>×</button></div>}
  {notice&&<div role="status" className="alert success"><strong>Success</strong><span>{notice}</span><button onClick={()=>setNotice('')}>×</button></div>}
+ {page==='operations'&&<StaffBoards slots={slots}/>}
  {page==='overview'&&<MarketingHome variants={variants} slots={slots} weekdays={weekdays} frequency={frequency} onSetFrequency={setFrequency} onSetWeekdays={setWeekdays} onCatalogue={()=>setPage('catalog')} onRecurring={()=>setPage('standing')} onOrders={()=>setPage('orders')} onAdmin={()=>setPage('admin')} onSelectProduct={v=>{adjust(v,1);setPage('catalog')}}/>}
  {(page==='catalog'||page==='standing')&&<><div className="heading"><div><div className="eyebrow">FRESHPREP · ORDERING</div><h1>{page==='catalog'?'Vegetable catalogue':'Recurring orders'}</h1><p>{page==='catalog'?'Browse fresh vegetables by preparation method and exact size. Sample catalogue pricing and images are illustrative only.':'Configure a repeat basket for every day or selected weekdays.'}</p></div><span className="countPill">{variants.length} options</span></div>
  <div className="cataloglayout"><div><section className="panel filters"><div className="searchbox"><span>⌕</span><input aria-label="Search vegetables" placeholder="Search vegetables, cut types or sizes..." value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="chips">{CATEGORIES.map(c=><button key={c} className={category===c?'chip chosen':'chip'} onClick={()=>setCategory(c)}>{c==='All'?'All preparations':c.toLowerCase()}</button>)}</div></section>

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { buildDemoCatalogue, buildDemoSlots } from './demo-catalog.js';
 import { nextOrderState, orderStates, type OrderState } from './workflow.js';
 import { permissions } from './authorization.js';
+import { buildProductionPlan,buildPackingQueue,buildDispatchQueue,mayAdvance,type DemoStaffRole } from './staff-boards.js';
 import { geoEventSchema } from './geo-events.js';
 import { allowDevelopmentApi } from './dev-guard.js';
 import { cors } from 'hono/cors';
@@ -57,6 +58,37 @@ export function createApp() {
   });
  });
  app.get('/dev/admin/roles',c=>c.json(Object.entries(permissions).map(([role,grants])=>({role,permissions:grants}))));
+ const validBoardDate=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional();
+ function boardFilters(c:import('hono').Context){
+  const parsed=validBoardDate.safeParse(c.req.query('date'));
+  if(!parsed.success)throw new Error('Invalid board date');
+  return {date:parsed.data,slotId:c.req.query('slotId')||undefined};
+ }
+ app.get('/dev/staff/production',c=>{
+  const filters=boardFilters(c);
+  return c.json(buildProductionPlan([...orders.values()],[...variants.values()],[...slots.values()],filters.date,filters.slotId));
+ });
+ app.get('/dev/staff/packing',c=>{
+  const filters=boardFilters(c);
+  return c.json(buildPackingQueue([...orders.values()],[...variants.values()],[...slots.values()],filters.date,filters.slotId));
+ });
+ app.get('/dev/staff/delivery',c=>{
+  const filters=boardFilters(c);
+  return c.json(buildDispatchQueue([...orders.values()],[...slots.values()],filters.date,filters.slotId));
+ });
+ app.post('/dev/staff/orders/:id/advance',zValidator('json',z.object({
+  role:z.enum(['CUTTER','QC','PACKER','DISPATCH','DELIVERY']),
+  nextState:z.enum(orderStates),location:geoEventSchema.shape.location.optional()
+ })),c=>{
+  const {role,nextState,location}=c.req.valid('json');
+  const order=orders.get(c.req.param('id'));
+  if(!order)return c.json({error:'Order not found'},404);
+  if(!mayAdvance(role,order.state,nextState))return c.json({error:'Role or state transition not permitted'},409);
+  order.state=nextOrderState(order.state,nextState);
+  audit('DEMO_ORDER_STAGE_CHANGED',order.id,location??{source:'UNAVAILABLE',unavailableReason:'Local desktop demo has no GPS',consentStatus:'NOT_REQUESTED'});
+  return c.json({id:order.id,state:order.state,role,notice:'Development demo only; no physical QC, packing or delivery proof created.'});
+ });
+
  app.patch('/dev/admin/orders/:id/state',zValidator('json',z.object({state:z.enum(orderStates)})),c=>{
   const order=orders.get(c.req.param('id'));
   if(!order)return c.json({error:'Order not found'},404);

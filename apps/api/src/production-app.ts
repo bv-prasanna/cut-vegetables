@@ -5,6 +5,8 @@ import {passwordMatches,digestToken,newSessionToken,bearerToken} from './securit
 import {isRole,canAny,type Role} from './authorization.js';
 import {geoEventSchema} from './geo-events.js';
 import {cutoffInstant,localDate} from './scheduling.js';
+import {createOperationsRoutes} from './ops-routes.js';
+import {createStaffBoardRoutes} from './staff-query-routes.js';
 type Context={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const loginSchema=z.object({email:z.string().email(),password:z.string().min(1),organizationId:z.string().uuid()});
 const orderSchema=z.object({
@@ -77,8 +79,8 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date()){
    const slot=slotQ.rows[0];if(!slot||!slot.active){await client.query('ROLLBACK');return c.json(reject('Slot unavailable'),422);}
    const existing=await client.query('SELECT id FROM orders WHERE organization_id=$1 AND idempotency_key=$2',[c.get('organizationId'),data.idempotencyKey]);
    if(existing.rowCount){await client.query('COMMIT');return c.json({id:existing.rows[0].id,replayed:true});}
-   const kitchen=await client.query('SELECT id,zone_code FROM kitchens WHERE id=$1 AND organization_id=$2 AND active=true',[data.kitchenId,c.get('organizationId')]);
-   if(!kitchen.rowCount||kitchen.rows[0].zone_code!==slot.zone_code){await client.query('ROLLBACK');return c.json(reject('Kitchen or zone unavailable'),422);}
+   const kitchen=await client.query('SELECT id,zone_code,producer_organization_id FROM kitchens WHERE id=$1 AND organization_id=$2 AND active=true',[data.kitchenId,c.get('organizationId')]);
+   if(!kitchen.rowCount||kitchen.rows[0].zone_code!==slot.zone_code||!kitchen.rows[0].producer_organization_id){await client.query('ROLLBACK');return c.json(reject('Kitchen, zone or producer assignment unavailable'),422);}
    if(clock().getTime()>=cutoffInstant(data.deliveryDate,{id:slot.id,label:slot.label,startMinute:slot.start_minute,endMinute:slot.end_minute,cutoffDayOffset:slot.cutoff_day_offset,cutoffMinute:slot.cutoff_minute,capacityOrders:slot.capacity_orders,active:slot.active}).getTime()){await client.query('ROLLBACK');return c.json(reject('Slot cutoff reached'),422);}
    const blackout=await client.query('SELECT 1 FROM slot_blackouts WHERE slot_id=$1 AND delivery_date=$2::date',[data.slotId,data.deliveryDate]);
    if(blackout.rowCount){await client.query('ROLLBACK');return c.json(reject('Slot blackout'),422);}
@@ -89,7 +91,7 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date()){
    const variants=await client.query('SELECT id,price_paise_per_kg,minimum_grams,increment_grams FROM product_variants WHERE active=true AND id=ANY($1::uuid[])',[ids]);
    const prices=new Map<string,{price_paise_per_kg:number;minimum_grams:number;increment_grams:number}>(variants.rows.map(v=>[v.id,v]));
    if(prices.size!==ids.length||data.items.some(i=>{const v=prices.get(i.variantId);return !v||i.grams<v.minimum_grams||(i.grams-v.minimum_grams)%v.increment_grams!==0;})){await client.query('ROLLBACK');return c.json(reject('Invalid variant or quantity'),422);}
-   const inserted=await client.query('INSERT INTO orders(organization_id,kitchen_id,slot_id,delivery_date,idempotency_key) VALUES($1,$2,$3,$4::date,$5) RETURNING id',[c.get('organizationId'),data.kitchenId,data.slotId,data.deliveryDate,data.idempotencyKey]);
+   const inserted=await client.query('INSERT INTO orders(organization_id,kitchen_id,slot_id,delivery_date,idempotency_key,producer_organization_id) VALUES($1,$2,$3,$4::date,$5,$6) RETURNING id',[c.get('organizationId'),data.kitchenId,data.slotId,data.deliveryDate,data.idempotencyKey,kitchen.rows[0].producer_organization_id]);
    const orderId:string=inserted.rows[0].id;
    for(const item of data.items){const v=prices.get(item.variantId)!;const amount=Math.round(v.price_paise_per_kg*item.grams/1000);await client.query('INSERT INTO order_items(order_id,variant_id,grams,price_paise_per_kg,line_total_paise) VALUES($1,$2,$3,$4,$5)',[orderId,item.variantId,item.grams,v.price_paise_per_kg,amount]);}
    await client.query('INSERT INTO slot_reservations(slot_id,delivery_date,order_id) VALUES($1,$2::date,$3)',[data.slotId,data.deliveryDate,orderId]);
@@ -97,6 +99,8 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date()){
    await client.query('COMMIT');return c.json({id:orderId,replayed:false},201);
   }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
  });
+ app.route('/v1',createOperationsRoutes(pool));
+ app.route('/v1',createStaffBoardRoutes(pool));
  app.onError((err,c)=>{console.error('API error',err.message);return c.json(reject('Internal server error'),500);});
  return app;
 }

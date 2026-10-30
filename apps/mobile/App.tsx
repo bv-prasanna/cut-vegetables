@@ -3,6 +3,7 @@ import {ActivityIndicator,Alert,FlatList,Image,Pressable,ScrollView,StatusBar,St
 import {SafeAreaProvider,SafeAreaView} from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import {formatRole,isBuyer,menuFor,roles,type MobileRole} from './src/roles';
+import StaffWorkBoard from './src/StaffWorkBoard';
 
 type Variant={id:string;vegetable:string;preparation:string;size:{kind:string;value:string|number;unit?:string};imageUrl:string;pricePaisePerKg:number;minimumGrams:number;incrementGrams:number;active:boolean};
 type Slot={id:string;label:string;startMinute:number;endMinute:number;cutoffDayOffset:number;cutoffMinute:number;capacityOrders:number;active:boolean};
@@ -78,6 +79,7 @@ function AppContent(){
     {visible.slice(0,100).map(v=><View style={styles.product} key={v.id}><Image style={styles.productImg} source={{uri:v.imageUrl}}/><View style={styles.productInfo}><Text style={styles.bold}>{v.vegetable}</Text><Text style={styles.muted}>{v.preparation.toLowerCase()} · {v.size.value}{v.size.kind==='numeric'?' '+(v.size.unit||'mm'):''}</Text><Text style={styles.money}>{money(v.pricePaisePerKg)} / kg (demo)</Text><View style={styles.counter}><P onPress={()=>adjust(v,-1)}>−</P><Text style={styles.bold}>{((cart[v.id]||0)/1000).toFixed(2)} kg</Text><P onPress={()=>adjust(v,1)}>+</P></View></View></View>)}
     {isBuyer(role)&&scheduleForm(screen==='Recurring')}</>;
   if(screen==='Orders')return <View style={styles.card}><Text style={styles.heading}>Order register</Text>{rows()}</View>;
+  if(['Production','Quality','Packing','Deliveries'].includes(screen))return <StaffWorkBoard role={role} apiBase={BASE}/>;
   if(screen==='Home')return <><View style={styles.banner}><Text style={styles.bannerEyebrow}>FRESHPREP · MOBILE WORKSPACE</Text><Text style={styles.bannerTitle}>{isBuyer(role)?'Your kitchen, ready for service.':'Your shift, clearly organized.'}</Text><Text style={styles.bannerText}>{formatRole(role)} workspace · same lightweight app, different menus.</Text></View>{cards()}<View style={styles.card}><Text style={styles.heading}>Available actions</Text>{menuFor(role).filter(v=>v!=='Home').map(v=><P key={v} onPress={()=>setScreen(v)}>{v}  →</P>)}</View></>;
   return <><View style={styles.card}><Text style={styles.heading}>{screen} workspace</Text><Text style={styles.muted}>Role: {formatRole(role)}. The overview below shows demo information, not an authenticated staff assignment.</Text>{cards()}</View>
     {(screen==='Tasks'||screen==='Production'||screen==='Quality'||screen==='Packing'||screen==='Deliveries'||screen==='Inventory'||screen==='Admin')&&<View style={styles.card}><Text style={styles.heading}>Operational work queue (read only)</Text><Text style={styles.muted}>Requires verified roles, production batches and delivery assignments before live actions can be enabled.</Text>{Object.entries(summary?.stateCounts||{}).map(([state,count])=><View style={styles.listRow} key={state}><Text style={styles.bold}>{state.replaceAll('_',' ')}</Text><Text style={styles.money}>{count}</Text></View>)}</View>}
@@ -90,7 +92,7 @@ function AppContent(){
  <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
   {error? <View style={styles.error}><Text style={styles.errorText}>{error}</Text><Text style={styles.muted}>Android emulator uses 10.0.2.2. Never expose unauthenticated demo API to a public network.</Text></View>:null}
   {working&&<ActivityIndicator color="#166440"/>}{section()}
-  <Text style={styles.footer}>FreshPrep pilot · Inventory, QC, GPS events and secured staff workflow integration are still pending.</Text>
+  <Text style={styles.footer}>FreshPrep pilot · Staff actions in the local app are simulations. Verified role login, production batch records and secure delivery proofs remain required.</Text>
  </ScrollView></SafeAreaView>;
 }
 export default function App(){return <SafeAreaProvider><AppContent/></SafeAreaProvider>;}
