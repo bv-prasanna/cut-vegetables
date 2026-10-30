@@ -114,7 +114,7 @@ export function createOperationsRoutes(pool:Pool){
    const r=await tx.query<{id:string}>(`INSERT INTO raw_lots(purchase_id,vegetable_id,supplier_lot,received_grams,usable_grams,rejected_grams)
      VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,[idParam(c),input.vegetableId,input.supplierLot??null,input.receivedGrams,input.usableGrams,input.rejectedGrams]);
    const eventId=await recordEvent(tx,c.get('organizationId'),c.get('userId'),input.event,'RAW_LOT_RECEIVED','RAW_LOT',r.rows[0].id);
-   await tx.query(`INSERT INTO inventory_movements(raw_lot_id,movement_kind,delta_grams,actor_id,event_id)
+   if(input.usableGrams>0)await tx.query(`INSERT INTO inventory_movements(raw_lot_id,movement_kind,delta_grams,actor_id,event_id)
      VALUES($1,'RECEIVE',$2,$3,$4)`,[r.rows[0].id,input.usableGrams,c.get('userId'),eventId]);
    await tx.query('UPDATE purchase_orders SET status=\'RECEIVED\' WHERE id=$1',[idParam(c)]);
    return r.rows[0];
@@ -176,7 +176,7 @@ export function createOperationsRoutes(pool:Pool){
     const ready=await tx.query<{ready:boolean}>(`SELECT NOT EXISTS(
      SELECT 1 FROM order_items oi WHERE oi.order_id=$1 AND
      COALESCE((SELECT SUM(pb.output_grams) FROM production_batches pb
-      WHERE pb.order_id=oi.order_id AND pb.variant_id=oi.variant_id AND pb.state='QC_PASSED'),0)<oi.grams
+      WHERE pb.order_id=oi.order_id AND pb.variant_id=oi.variant_id AND pb.state IN ('QC_PASSED','PACKED')),0)<oi.grams
     ) AS ready`,[batch.order_id]);
     if(ready.rows[0].ready)await tx.query("UPDATE orders SET state='QC_PASSED' WHERE id=$1 AND state='IN_PRODUCTION'",[batch.order_id]);
    }
