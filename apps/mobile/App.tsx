@@ -4,6 +4,8 @@ import {SafeAreaProvider,SafeAreaView} from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import {formatRole,isBuyer,menuFor,roles,type MobileRole} from './src/roles';
 import StaffWorkBoard from './src/StaffWorkBoard';
+import SecureApp from './src/SecureApp';
+import {isSecureMobileRelease} from './src/secure-api';
 
 type Variant={id:string;vegetable:string;preparation:string;size:{kind:string;value:string|number;unit?:string};imageUrl:string;pricePaisePerKg:number;minimumGrams:number;incrementGrams:number;active:boolean};
 type Slot={id:string;label:string;startMinute:number;endMinute:number;cutoffDayOffset:number;cutoffMinute:number;capacityOrders:number;active:boolean};
@@ -95,7 +97,7 @@ function AppContent(){
   <Text style={styles.footer}>FreshPrep pilot · Staff actions in the local app are simulations. Verified role login, production batch records and secure delivery proofs remain required.</Text>
  </ScrollView></SafeAreaView>;
 }
-export default function App(){return <SafeAreaProvider><AppContent/></SafeAreaProvider>;}
+export default function App(){return isSecureMobileRelease()?<SecureApp/>:<SafeAreaProvider><AppContent/></SafeAreaProvider>;}
 const GREEN='#155c3e',MUTED='#819087';
 const styles=StyleSheet.create({
  safe:{flex:1,backgroundColor:'#f6f9f6'},header:{height:65,backgroundColor:'#fff',paddingHorizontal:18,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},

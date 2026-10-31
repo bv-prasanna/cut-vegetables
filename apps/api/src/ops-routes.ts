@@ -41,6 +41,46 @@ export function createOperationsRoutes(pool:Pool){
   if(e.status===500)console.error('Operational API error',err);
   return c.json({error:e.message},e.status);
  });
+ app.get('/ops/suppliers',async c=>{
+  if(!canAny(c.get('roles'),'procurement:read')&&!canAny(c.get('roles'),'procurement:write'))
+   throw new BusinessFailure(403,'Permission denied');
+  const q=await pool.query('SELECT id,name,active FROM suppliers WHERE organization_id=$1 ORDER BY name LIMIT 300',
+    [c.get('organizationId')]);
+  return c.json(q.rows);
+ });
+ app.get('/ops/purchases',async c=>{
+  if(!canAny(c.get('roles'),'procurement:read')&&!canAny(c.get('roles'),'procurement:write'))
+   throw new BusinessFailure(403,'Permission denied');
+  const q=await pool.query(`SELECT po.id,po.status,po.created_at,s.name AS supplier,po.supplier_id
+   FROM purchase_orders po JOIN suppliers s ON s.id=po.supplier_id
+   WHERE po.organization_id=$1 ORDER BY po.created_at DESC LIMIT 200`,[c.get('organizationId')]);
+  return c.json(q.rows);
+ });
+ app.get('/ops/raw-lots',async c=>{
+  if(!canAny(c.get('roles'),'inventory:read')&&!canAny(c.get('roles'),'procurement:read')&&
+     !canAny(c.get('roles'),'production:read'))throw new BusinessFailure(403,'Permission denied');
+  const q=await pool.query(`SELECT rl.id,rl.purchase_id,rl.vegetable_id,v.name AS vegetable,
+   rl.supplier_lot,rl.received_grams,rl.usable_grams,rl.rejected_grams,rl.received_at
+   FROM raw_lots rl JOIN purchase_orders po ON po.id=rl.purchase_id
+    JOIN vegetables v ON v.id=rl.vegetable_id
+   WHERE po.organization_id=$1 ORDER BY rl.received_at DESC LIMIT 200`,[c.get('organizationId')]);
+  return c.json(q.rows);
+ });
+ app.get('/ops/stops',async c=>{
+  if(!canAny(c.get('roles'),'delivery:read')&&!canAny(c.get('roles'),'delivery:assigned'))
+   throw new BusinessFailure(403,'Permission denied');
+  const driverOnly=!canAny(c.get('roles'),'delivery:read');
+  const q=await pool.query(`SELECT ds.id,ds.run_id,ds.order_id,ds.stop_number,ds.status,
+   dr.driver_id,dr.delivery_date::text AS delivery_date,
+   k.name AS kitchen,k.address,org.name AS customer
+   FROM delivery_stops ds JOIN delivery_runs dr ON dr.id=ds.run_id
+    JOIN orders o ON o.id=ds.order_id JOIN kitchens k ON k.id=o.kitchen_id
+    JOIN organizations org ON org.id=o.organization_id
+   WHERE dr.producer_organization_id=$1 AND ($2::boolean=false OR dr.driver_id=$3)
+   ORDER BY dr.delivery_date DESC,ds.stop_number LIMIT 300`,
+   [c.get('organizationId'),driverOnly,c.get('userId')]);
+  return c.json(q.rows);
+ });
  app.get('/ops/summary',async c=>{
   requirePermission(c,'orders:read');
   const org=c.get('organizationId');
