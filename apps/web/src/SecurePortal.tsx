@@ -1,6 +1,7 @@
 import React,{useState} from 'react';
 import './secure-portal.css';
 import CustomerOrderPortal from './CustomerOrderPortal';
+import CatalogAdmin from './CatalogAdmin';
 type Session={accessToken:string;tokenType:string;expiresInSeconds:number};
 type Profile={userId:string;organizationId:string;roles:string[]};
 type Overview={staff:number;activeKitchens:number;ordersByState:{state:string;count:number}[]};
@@ -23,7 +24,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  const[session,setSession]=useState<Session|null>(null),[profile,setProfile]=useState<Profile|null>(null);
  const[overview,setOverview]=useState<Overview|null>(null),[staff,setStaff]=useState<Staff[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]);
  const[tasks,setTasks]=useState<Task[]>([]),[boardDate,setBoardDate]=useState(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}));
- const[tab,setTab]=useState<'Overview'|'Supply'|'Staff'|'Customers'|'Cutting'|'Packing'|'Delivery'>('Overview');
+ const[tab,setTab]=useState<'Overview'|'Supply'|'Staff'|'Customers'|'Catalogue'|'Slots'|'Cutting'|'Packing'|'Delivery'>('Overview');
  const[generationDate,setGenerationDate]=useState(new Date(Date.now()+86_400_000).toISOString().slice(0,10));
  const[generationSummary,setGenerationSummary]=useState<Record<string,number>|null>(null);
  const[staffEmail,setStaffEmail]=useState(''),[staffPassword,setStaffPassword]=useState(''),[staffRole,setStaffRole]=useState('OPERATOR');
@@ -98,7 +99,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
    setOrgName('');setContactEmail('');setContactPassword('');setKitchenName('');setAddress('');
   },'Customer organisation and first kitchen created.');
  }
- const availableTabs=[...(canCustomer?['Supply']:[]),...(canAdmin?['Overview','Staff','Customers']:['Overview']),...(canCut?['Cutting']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[])] as (typeof tab)[];
+ const availableTabs=[...(canCustomer?['Supply']:[]),...(canAdmin?['Overview','Staff','Customers','Catalogue','Slots']:['Overview']),...(canCut?['Cutting']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[])] as (typeof tab)[];
  return <div className="fp-secure">
  <header className="fp-secure-header"><button onClick={onHome} className="fp-secure-brand">❧ FreshPrep <small>Veggies</small></button><div><span>SECURE BUSINESS PORTAL</span>{session&&<button onClick={()=>void logout()}>Sign out</button>}</div></header>
  {!session?<div className="fp-login-layout"><div className="fp-login-story"><span>FRESHPREP OPERATIONS</span><h1>One platform.<br/>Every kitchen.<br/>Every role.</h1><p>Sign in to manage staff, customer kitchens and operational workboards.</p><div>Signed JWTs · Database-verified permissions · Organisation-scoped access</div></div>
@@ -114,6 +115,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  {error&&<p role="alert" className="fp-error">{error}</p>}{message&&<p role="status" className="fp-notice">{message}</p>}
  <nav className="fp-secure-tabs">{availableTabs.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>void openTab(t)}>{t}</button>)}</nav>
  {tab==='Supply'&&session&&profile&&<CustomerOrderPortal token={session.accessToken} base={BASE} roles={profile.roles} onLogout={()=>void logout()}/>}
+ {(tab==='Catalogue'||tab==='Slots')&&session&&<CatalogAdmin base={BASE} token={session.accessToken} superadmin={profile?.roles.includes('SUPERADMIN')??false} mode={tab}/>}
  {tab==='Overview'&&<section className="fp-secure-panels"><article><h3>Access policy</h3><p>Your roles are obtained from active database memberships each request. The client cannot grant itself permissions.</p><strong>{profile?.roles.join(', ')}</strong></article>
  {canAdmin&&<><article><h3>Active customer kitchens</h3><strong>{overview?.activeKitchens??'—'}</strong></article><article><h3>Team members</h3><strong>{overview?.staff??'—'}</strong></article><article><h3>Orders by stage</h3>{overview?.ordersByState.map(r=><div key={r.state}>{r.state}: {r.count}</div>)}</article></>}
  </section>}

@@ -13,6 +13,7 @@ import {cutoffInstant,localDate} from './scheduling.js';
 import {createOperationsRoutes} from './ops-routes.js';
 import {createStaffBoardRoutes} from './staff-query-routes.js';
 import {createRecurrenceRoutes} from './recurrence-routes.js';
+import {createCatalogAdminRoutes} from './catalog-admin.js';
 type Context={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const loginSchema=z.object({email:z.string().email().max(254),password:z.string().min(1).max(1024),organizationId:z.string().uuid()});
 const orderSchema=z.object({
@@ -142,6 +143,7 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
   }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
  });
  app.route('/v1',createRecurrenceRoutes(pool,clock));
+ app.route('/v1',createCatalogAdminRoutes(pool));
  app.route('/v1',createAdminRoutes(pool));
  app.route('/v1',createOperationsRoutes(pool));
  app.route('/v1',createStaffBoardRoutes(pool));
