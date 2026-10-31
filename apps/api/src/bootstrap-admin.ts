@@ -1,15 +1,21 @@
 import {Pool} from 'pg';
 import {passwordHash} from './security.js';
+import {z} from 'zod';
 /** Explicit local bootstrap. Never expose as HTTP endpoint. */
 export async function bootstrap(pool:Pool,organizationName:string,email:string,password:string){
- if(!organizationName.trim()||!email.includes('@'))throw new Error('Name and email required');
+ const input=z.object({
+  organizationName:z.string().trim().min(2).max(160),
+  email:z.string().email().max(254),
+  password:z.string().min(12).max(1024)
+ }).parse({organizationName,email:email.toLowerCase().trim(),password});
  const client=await pool.connect();
  try{
   await client.query('BEGIN');
+  await client.query('SELECT pg_advisory_xact_lock($1)',[73019323]);
   const existing=await client.query('SELECT 1 FROM memberships WHERE role=$1 LIMIT 1',['SUPERADMIN']);
   if(existing.rowCount)throw new Error('Superadmin already exists; bootstrap disabled');
-  const org=await client.query('INSERT INTO organizations(name,kind) VALUES($1,$2) RETURNING id',[organizationName.trim(),'PRODUCER']);
-  const user=await client.query('INSERT INTO users(email,password_hash) VALUES($1,$2) RETURNING id',[email.toLowerCase().trim(),passwordHash(password)]);
+  const org=await client.query('INSERT INTO organizations(name,kind) VALUES($1,$2) RETURNING id',[input.organizationName,'PRODUCER']);
+  const user=await client.query('INSERT INTO users(email,password_hash) VALUES($1,$2) RETURNING id',[input.email,passwordHash(input.password)]);
   await client.query('INSERT INTO memberships(organization_id,user_id,role) VALUES($1,$2,$3)',[org.rows[0].id,user.rows[0].id,'SUPERADMIN']);
   await client.query('COMMIT');
   return {organizationId:org.rows[0].id,userId:user.rows[0].id};

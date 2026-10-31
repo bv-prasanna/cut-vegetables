@@ -1,0 +1,24 @@
+# Blueprint for the secure PostgreSQL API. Do NOT deploy the localhost demo app.
+services:
+  - type: web
+    name: freshprep-api
+    runtime: node
+    plan: free
+    region: singapore
+    branch: feat/typescript-platform-foundation
+    buildCommand: npm install --no-audit --no-fund && npm run typecheck
+    startCommand: npm run api:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_VERSION
+        value: 22
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
