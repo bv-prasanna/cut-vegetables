@@ -1,5 +1,6 @@
 import React,{useState} from 'react';
 import './secure-portal.css';
+import CustomerOrderPortal from './CustomerOrderPortal';
 type Session={accessToken:string;tokenType:string;expiresInSeconds:number};
 type Profile={userId:string;organizationId:string;roles:string[]};
 type Overview={staff:number;activeKitchens:number;ordersByState:{state:string;count:number}[]};
@@ -22,11 +23,14 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  const[session,setSession]=useState<Session|null>(null),[profile,setProfile]=useState<Profile|null>(null);
  const[overview,setOverview]=useState<Overview|null>(null),[staff,setStaff]=useState<Staff[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]);
  const[tasks,setTasks]=useState<Task[]>([]),[boardDate,setBoardDate]=useState(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}));
- const[tab,setTab]=useState<'Overview'|'Staff'|'Customers'|'Cutting'|'Packing'|'Delivery'>('Overview');
+ const[tab,setTab]=useState<'Overview'|'Supply'|'Staff'|'Customers'|'Cutting'|'Packing'|'Delivery'>('Overview');
+ const[generationDate,setGenerationDate]=useState(new Date(Date.now()+86_400_000).toISOString().slice(0,10));
+ const[generationSummary,setGenerationSummary]=useState<Record<string,number>|null>(null);
  const[staffEmail,setStaffEmail]=useState(''),[staffPassword,setStaffPassword]=useState(''),[staffRole,setStaffRole]=useState('OPERATOR');
  const[orgName,setOrgName]=useState(''),[contactEmail,setContactEmail]=useState(''),[contactPassword,setContactPassword]=useState(''),[kitchenName,setKitchenName]=useState(''),[address,setAddress]=useState(''),[zoneCode,setZoneCode]=useState('BENGALURU_DEMO');
  const[message,setMessage]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const canAdmin=profile?.roles.some(r=>r==='SUPERADMIN'||r==='ADMIN')??false;
+ const canCustomer=profile?.roles.some(r=>['CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER'].includes(r))??false;
  const canCut=profile?.roles.some(r=>['SUPERADMIN','ADMIN','OPERATOR','PRODUCTION_SUPERVISOR','STORE'].includes(r))??false;
  const canPack=profile?.roles.some(r=>['SUPERADMIN','PACKER'].includes(r))??false;
  const canDeliver=profile?.roles.some(r=>['SUPERADMIN','DISPATCH','DRIVER'].includes(r))??false;
@@ -35,7 +39,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
   try{
    const result=await request<Session>('/auth/login',undefined,'POST',{email:email.trim(),password,organizationId:organizationId.trim()});
    const me=await request<Profile>('/v1/me',result.accessToken);
-   setSession(result);setProfile(me);setPassword('');setTab('Overview');
+   setSession(result);setProfile(me);setPassword('');setTab(me.roles.some(r=>['CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER'].includes(r))?'Supply':'Overview');
    setMessage('Signed in. JWT expires after '+Math.round(result.expiresInSeconds/60)+' minutes.');
    if(me.roles.includes('SUPERADMIN')||me.roles.includes('ADMIN')){
     await reloadAdmin(result.accessToken);
@@ -71,6 +75,13 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
    setTasks(rows);
   },'Workboard loaded from PostgreSQL.');
  }
+ async function generateOrders(){
+  if(!session)return;
+  await run(async()=>{
+   const result=await request<{summary:Record<string,number>}>('/v1/admin/recurrences/generate',session.accessToken,'POST',{deliveryDate:generationDate});
+   setGenerationSummary(result.summary);
+  },'Recurring schedules processed. Review the breakdown and any blocked deliveries.');
+ }
  async function createStaff(e:React.FormEvent){
   e.preventDefault();if(!session)return;
   await run(async()=>{
@@ -87,7 +98,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
    setOrgName('');setContactEmail('');setContactPassword('');setKitchenName('');setAddress('');
   },'Customer organisation and first kitchen created.');
  }
- const availableTabs=[...(canAdmin?['Overview','Staff','Customers']:['Overview']),...(canCut?['Cutting']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[])] as (typeof tab)[];
+ const availableTabs=[...(canCustomer?['Supply']:[]),...(canAdmin?['Overview','Staff','Customers']:['Overview']),...(canCut?['Cutting']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[])] as (typeof tab)[];
  return <div className="fp-secure">
  <header className="fp-secure-header"><button onClick={onHome} className="fp-secure-brand">❧ FreshPrep <small>Veggies</small></button><div><span>SECURE BUSINESS PORTAL</span>{session&&<button onClick={()=>void logout()}>Sign out</button>}</div></header>
  {!session?<div className="fp-login-layout"><div className="fp-login-story"><span>FRESHPREP OPERATIONS</span><h1>One platform.<br/>Every kitchen.<br/>Every role.</h1><p>Sign in to manage staff, customer kitchens and operational workboards.</p><div>Signed JWTs · Database-verified permissions · Organisation-scoped access</div></div>
@@ -102,8 +113,16 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <div className="fp-secure-intro"><div><span>WORKSPACE · {profile?.organizationId.slice(0,8)}</span><h1>Operations centre</h1><p>Roles: {profile?.roles.join(' · ')}</p></div><button onClick={()=>void logout()}>Secure logout</button></div>
  {error&&<p role="alert" className="fp-error">{error}</p>}{message&&<p role="status" className="fp-notice">{message}</p>}
  <nav className="fp-secure-tabs">{availableTabs.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>void openTab(t)}>{t}</button>)}</nav>
+ {tab==='Supply'&&session&&profile&&<CustomerOrderPortal token={session.accessToken} base={BASE} roles={profile.roles} onLogout={()=>void logout()}/>}
  {tab==='Overview'&&<section className="fp-secure-panels"><article><h3>Access policy</h3><p>Your roles are obtained from active database memberships each request. The client cannot grant itself permissions.</p><strong>{profile?.roles.join(', ')}</strong></article>
  {canAdmin&&<><article><h3>Active customer kitchens</h3><strong>{overview?.activeKitchens??'—'}</strong></article><article><h3>Team members</h3><strong>{overview?.staff??'—'}</strong></article><article><h3>Orders by stage</h3>{overview?.ordersByState.map(r=><div key={r.state}>{r.state}: {r.count}</div>)}</article></>}
+ </section>}
+ {tab==='Overview'&&canAdmin&&<section className="fp-secure-card" style={{marginTop:16}}>
+ <h3>Recurring order generation</h3><p>Convert eligible customer schedules into PostgreSQL orders before slot cutoffs. Run this explicitly for the target delivery date; the free service does not guarantee background scheduling.</p>
+ <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+ <label style={{margin:0}}>Delivery date<input type="date" value={generationDate} onChange={e=>setGenerationDate(e.target.value)}/></label>
+ <button disabled={busy} onClick={()=>void generateOrders()} style={{background:'#165b38',color:'white',border:0,borderRadius:8,padding:'12px 15px',cursor:'pointer'}}>Generate due orders</button></div>
+ {generationSummary&&<div role="status" className="fp-secure-line">{Object.entries(generationSummary).map(([status,count])=><span key={status}>{status}: {count}　</span>)}</div>}
  </section>}
  {tab==='Staff'&&canAdmin&&<div className="fp-secure-split"><section className="fp-secure-card"><h3>Create staff account</h3><form onSubmit={e=>void createStaff(e)}>
  <label>Email<input type="email" required value={staffEmail} onChange={e=>setStaffEmail(e.target.value)}/></label>

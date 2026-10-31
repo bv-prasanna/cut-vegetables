@@ -12,7 +12,8 @@
     "db:migrate": "tsx src/db-migrate.ts",
     "db:bootstrap": "tsx src/bootstrap-admin.ts",
     "db:seed-demo": "tsx src/seed-postgres-demo.ts",
-    "start:pg": "tsx src/production-index.ts"
+    "start:pg": "tsx src/production-index.ts",
+    "recurrence:run": "tsx src/generate-recurring.ts"
   },
   "dependencies": {
     "hono": "^4.6.0",
