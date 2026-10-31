@@ -34,7 +34,7 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
   allowedOrigins.add('http://localhost:5173');
  }
  app.use('*',cors({
-  origin:(origin)=>allowedOrigins.has(origin)?origin:undefined,
+  origin:[...allowedOrigins],
   allowMethods:['GET','POST','PATCH','DELETE','OPTIONS'],
   allowHeaders:['Content-Type','Authorization'],
   maxAge:600
