@@ -14,6 +14,7 @@ describe('secure mobile environment',()=>{
  it('never exposes production tasks from buyer role claims',()=>{
   const buyer=screenPermissions(['CUSTOMER_BUYER']);
   expect(buyer).toContain('Place Order');
+  expect(buyer).toContain('Recurring');
   expect(buyer).not.toContain('Delivery');
   expect(buyer).not.toContain('Packing');
  });
@@ -22,6 +23,7 @@ describe('secure mobile environment',()=>{
   expect(screenPermissions(['PACKER'])).toContain('Packing');
   expect(screenPermissions(['DRIVER'])).toContain('Delivery');
   expect(screenPermissions(['DRIVER'])).not.toContain('Place Order');
+  expect(screenPermissions(['DRIVER'])).not.toContain('Recurring');
  });
  it('formats a product size with correct unit',()=>{
   expect(sizeDescription({id:'a',sku:'POTATO',vegetable:'Potato',preparation:'DICED',size_kind:'numeric',size_number:'10',size_unit:'mm',size_label:null,image_url:'',price_paise_per_kg:4500,minimum_grams:500,increment_grams:250})).toBe('10 mm');

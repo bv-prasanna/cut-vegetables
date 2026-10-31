@@ -24,6 +24,7 @@ export default function CatalogAdmin({base,token,superadmin,mode}:Props){
  const[price,setPrice]=useState('50'),[minGrams,setMinGrams]=useState('500'),[increment,setIncrement]=useState('250');
  const[zone,setZone]=useState('BENGALURU'),[label,setLabel]=useState('Morning 5 AM - 8 AM');
  const[start,setStart]=useState('300'),[end,setEnd]=useState('480'),[cutoffDay,setCutoffDay]=useState('1'),[cutoffAt,setCutoffAt]=useState('1380'),[capacity,setCapacity]=useState('50');
+ const[editedPrices,setEditedPrices]=useState<Record<string,string>>({});
  const[search,setSearch]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
  async function refresh(){
   setBusy(true);
@@ -70,7 +71,10 @@ export default function CatalogAdmin({base,token,superadmin,mode}:Props){
   pricePaisePerKg:Math.round(Number(price)*100),minimumGrams:Number(minGrams),incrementGrams:Number(increment)
  }), 'SKU created')}>Create product variant</button>}</section></div>
  <div className="fp-customer-filter"><h3>Existing variants ({variants.length})</h3><input placeholder="Search SKU or vegetable" value={search} onChange={e=>setSearch(e.target.value)}/></div>
- <div className="fp-secure-table"><table><thead><tr><th>Vegetable</th><th>Preparation</th><th>SKU</th><th>Price</th><th>Active</th><th>Action</th></tr></thead><tbody>{variants.filter(v=>(v.sku+' '+v.vegetable).toLowerCase().includes(search.toLowerCase())).map(v=><tr key={v.id}><td>{v.vegetable}</td><td>{v.method_code} · {v.size_kind==='numeric'?v.size_number+' '+v.size_unit:v.size_label}</td><td>{v.sku}</td><td>{money(v.price_paise_per_kg)}</td><td>{v.active?'Yes':'No'}</td><td>{superadmin&&<button disabled={busy} onClick={()=>void perform(()=>api(base,token,'/v1/admin/variants/'+v.id,'PATCH',{active:!v.active}),v.sku+' updated')}>{v.active?'Disable':'Activate'}</button>}</td></tr>)}</tbody></table></div></>}
+ <div className="fp-secure-table"><table><thead><tr><th>Vegetable</th><th>Preparation</th><th>SKU</th><th>Price</th><th>Active</th><th>Action</th></tr></thead><tbody>{variants.filter(v=>(v.sku+' '+v.vegetable).toLowerCase().includes(search.toLowerCase())).map(v=><tr key={v.id}><td>{v.vegetable}</td><td>{v.method_code} · {v.size_kind==='numeric'?v.size_number+' '+v.size_unit:v.size_label}</td><td>{v.sku}</td><td>{superadmin?<input aria-label={'Price per kg for '+v.sku} style={{width:95}} type="number" min="0" step="0.01" value={editedPrices[v.id]??String(v.price_paise_per_kg/100)} onChange={e=>setEditedPrices(old=>({...old,[v.id]:e.target.value}))}/>:money(v.price_paise_per_kg)}</td><td>{v.active?'Yes':'No'}</td><td>{superadmin&&<>
+ <button disabled={busy} onClick={()=>void perform(()=>api(base,token,'/v1/admin/variants/'+v.id,'PATCH',{pricePaisePerKg:Math.round(Number(editedPrices[v.id]??String(v.price_paise_per_kg/100))*100)}),v.sku+' price saved')}>Save price</button>
+ <button disabled={busy} onClick={()=>void perform(()=>api(base,token,'/v1/admin/variants/'+v.id,'PATCH',{active:!v.active}),v.sku+' updated')}>{v.active?'Disable':'Activate'}</button>
+ </>}</td></tr>)}</tbody></table></div></>}
  {mode==='Slots'&&<><div className="fp-secure-split" style={{margin:'18px 0'}}><section className="fp-secure-card"><h3>Create delivery window</h3>
  <label>Service zone<input value={zone} onChange={e=>setZone(e.target.value)}/></label>
  <label>Window label<input value={label} onChange={e=>setLabel(e.target.value)}/></label>

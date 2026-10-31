@@ -6,6 +6,7 @@ import {backend,firstAllowedScreen,screenPermissions,sizeDescription,validateApi
  type Session,type Identity,type CatalogueVariant,type Kitchen,type DeliverySlot,type Order,type StaffBoardRow} from './secure-api';
 
 type Fields=Record<string,string>;
+type Recurrence={id:string;state:string;frequency:string;start_date:string;weekdays:number[];slot_id:string};
 type Mutation='SUPPLIER'|'PURCHASE'|'RECEIVE'|'BATCH'|'COMPLETE'|'QC'|'PACK'|'RUN'|'STOP'|'POD';
 type Operation={
  title:string;path:string;method:'POST';eventType:string;subjectType:string;
@@ -63,6 +64,8 @@ function AuthenticatedMobile(){
  const [data,setData]=useState<unknown[]>([]),[date,setDate]=useState(new Date().toISOString().slice(0,10));
  const [catalogue,setCatalogue]=useState<CatalogueVariant[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]),[slots,setSlots]=useState<DeliverySlot[]>([]);
  const [cart,setCart]=useState<Record<string,number>>({}),[kitchenId,setKitchenId]=useState(''),[slotId,setSlotId]=useState('');
+ const [recurrences,setRecurrences]=useState<Recurrence[]>([]),[frequency,setFrequency]=useState<'DAILY'|'WEEKLY'>('WEEKLY');
+ const [weekdays,setWeekdays]=useState<number[]>([1,2,3,4,5,6]);
  const [operation,setOperation]=useState<Mutation>('BATCH'),[fields,setFields]=useState<Fields>({});
  const screens=screenPermissions(identity?.roles||[]);
  const call=useCallback(async<T,>(path:string,method='GET',payload?:unknown):Promise<T>=>{
@@ -92,7 +95,7 @@ function AuthenticatedMobile(){
   setLoading(true);setError('');
   try{
    let path='';
-   if(screen==='Catalogue'||screen==='Place Order')path='/v1/catalog';
+   if(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')path='/v1/catalog';
    if(screen==='Orders')path='/v1/orders';
    if(screen==='Cutting')path='/v1/ops/production-plan?date='+encodeURIComponent(date);
    if(screen==='Quality'||screen==='Packing')path='/v1/ops/batches';
@@ -101,14 +104,15 @@ function AuthenticatedMobile(){
    if(screen==='Administration')path='/v1/admin/overview';
    if(path){
     const result=await call<unknown>(path);
-    if(screen==='Catalogue'||screen==='Place Order')setCatalogue(result as CatalogueVariant[]);
+    if(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')setCatalogue(result as CatalogueVariant[]);
     else setData(Array.isArray(result)?result:[result]);
    }
-   if(screen==='Place Order'){
+   if(screen==='Place Order'||screen==='Recurring'){
     const [k,s]=await Promise.all([call<Kitchen[]>('/v1/kitchens'),call<DeliverySlot[]>('/v1/delivery-slots')]);
     setKitchens(k);setSlots(s);
     if(k.length)setKitchenId(old=>old||k[0].id);
     if(s.length)setSlotId(old=>old||s[0].id);
+    if(screen==='Recurring')setRecurrences(await call<Recurrence[]>('/v1/recurrences'));
    }
   }catch(e){setError(e instanceof Error?e.message:'Unable to load this screen');}
   finally{setLoading(false);}
@@ -129,6 +133,42 @@ function AuthenticatedMobile(){
    });
    setCart({});Alert.alert('Order confirmed','Order reference: '+result.id);setScreen('Orders');
   }catch(e){setError(e instanceof Error?e.message:'Unable to submit order');}finally{setLoading(false);}
+ }
+ async function placeRecurrence(){
+  if(!identity?.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))){
+   Alert.alert('Read-only account','This account cannot manage delivery schedules.');return;
+  }
+  if(!kitchenId||!slotId||!selected.length){Alert.alert('Schedule incomplete','Select a kitchen, slot and products.');return;}
+  if(frequency==='WEEKLY'&&!weekdays.length){Alert.alert('Choose weekdays','Select one or more delivery days.');return;}
+  setLoading(true);setError('');
+  try{
+   const ev=await captureEvent({title:'Schedule',path:'',method:'POST',fields:[],
+    eventType:'RECURRING_SCHEDULE_CREATED',subjectType:'SCHEDULE'},'pending');
+   const r=await call<{id:string}>('/v1/recurrences','POST',{
+    kitchenId,slotId,startDate:date,frequency,weekdays:frequency==='WEEKLY'?weekdays:[],items:selected,event:ev
+   });
+   Alert.alert('Schedule saved','ID: '+r.id+'. Administrator generation is required before each cutoff.');
+   await refresh();
+  }catch(e){setError(e instanceof Error?e.message:'Unable to save recurring schedule');}
+  finally{setLoading(false);}
+ }
+ async function changeRecurrence(s:Recurrence,state:'ACTIVE'|'PAUSED'|'CANCELLED'){
+  setLoading(true);setError('');
+  try{
+   await call('/v1/recurrences/'+s.id,'PATCH',{state});
+   await refresh();
+   Alert.alert('Schedule updated','Status: '+state);
+  }catch(e){setError(e instanceof Error?e.message:'Schedule update rejected');}
+  finally{setLoading(false);}
+ }
+ async function skipRecurrence(s:Recurrence){
+  setLoading(true);setError('');
+  try{
+   await call('/v1/recurrences/'+s.id+'/skips','POST',{deliveryDate:date,reason:'Customer requested skipped delivery'});
+   Alert.alert('Delivery skipped','Skipped '+date+'. An existing confirmed order is not cancelled by skipping.');
+   await refresh();
+  }catch(e){setError(e instanceof Error?e.message:'Unable to skip this delivery');}
+  finally{setLoading(false);}
  }
  async function submitAction(){
   const op=operations[operation];
@@ -186,20 +226,34 @@ function AuthenticatedMobile(){
   {screen==='Home'&&<View style={styles.card}><Text style={styles.heading}>Your FreshPrep workspaces</Text>
    <Text style={styles.muted}>Your menus reflect active database memberships. No local role switching is permitted.</Text>
    {screens.filter(s=>s!=='Home').map(s=><Btn key={s} text={s+' →'} secondary onPress={()=>setScreen(s)}/>)}</View>}
-  {(screen==='Catalogue'||screen==='Place Order')&&<>{catalogue.map(v=><View key={v.id} style={styles.card}>
+  {(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')&&<>{catalogue.map(v=><View key={v.id} style={styles.card}>
    <Text style={styles.item}>{v.vegetable} · {v.preparation.toLowerCase()} · {sizeDescription(v)}</Text>
    <Text style={styles.muted}>₹{(v.price_paise_per_kg/100).toFixed(2)}/kg · min {kg(v.minimum_grams)} · step {kg(v.increment_grams)}</Text>
-   {screen==='Place Order'&&<View style={styles.row}><Btn text="−" secondary onPress={()=>increment(v,-1)}/><Text>{kg(cart[v.id]||0)}</Text><Btn text="+" secondary onPress={()=>increment(v,1)}/></View>}
+   {(screen==='Place Order'||screen==='Recurring')&&identity.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))&&<View style={styles.row}><Btn text="−" secondary onPress={()=>increment(v,-1)}/><Text>{kg(cart[v.id]||0)}</Text><Btn text="+" secondary onPress={()=>increment(v,1)}/></View>}
   </View>)}
-  {screen==='Place Order'&&<View style={styles.card}><Text style={styles.heading}>Delivery details</Text>
+  {(screen==='Place Order'||screen==='Recurring')&&<View style={styles.card}><Text style={styles.heading}>Delivery details</Text>
    <Input title="Delivery date YYYY-MM-DD" value={date} onChange={setDate}/>
    <Text style={styles.label}>Choose kitchen</Text>{kitchens.map(k=><Btn key={k.id} secondary={kitchenId!==k.id} text={k.name+' · '+k.zone_code} onPress={()=>setKitchenId(k.id)}/>)}
    <Text style={styles.label}>Delivery time window</Text>{slots.filter(s=>!kitchens.find(k=>k.id===kitchenId)||s.zone_code===kitchens.find(k=>k.id===kitchenId)?.zone_code).map(s=><Btn key={s.id} secondary={slotId!==s.id} text={s.label} onPress={()=>setSlotId(s.id)}/>)}
+   {screen==='Recurring'&&<>
+    <Text style={styles.label}>Delivery frequency</Text>
+    <View style={styles.row}><Btn text="Daily" secondary={frequency!=='DAILY'} onPress={()=>setFrequency('DAILY')}/><Btn text="Selected weekdays" secondary={frequency!=='WEEKLY'} onPress={()=>setFrequency('WEEKLY')}/></View>
+    {frequency==='WEEKLY'&&<View style={styles.row}>{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day,index)=><Btn key={day} text={day} secondary={!weekdays.includes(index)} onPress={()=>setWeekdays(old=>old.includes(index)?old.filter(x=>x!==index):[...old,index])}/>)}</View>}
+   </>}
    <Text style={styles.item}>{selected.length} items selected</Text>
-   <Btn text="Submit confirmed order" disabled={loading} onPress={()=>void placeOrder()}/>
+   {identity.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))&&
+    <Btn text={screen==='Recurring'?'Create recurring schedule':'Submit confirmed order'} disabled={loading} onPress={()=>screen==='Recurring'?void placeRecurrence():void placeOrder()}/>}
+   {screen==='Recurring'&&<><Text style={styles.heading}>Saved schedules</Text>
+    {recurrences.map(rec=><View key={rec.id} style={styles.card}><Text style={styles.item}>{rec.frequency} · {rec.state}</Text><Text style={styles.muted}>From {rec.start_date} · {rec.id}</Text>
+    {identity.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))&&rec.state!=='CANCELLED'&&<View style={styles.row}>
+     <Btn text={rec.state==='ACTIVE'?'Pause':'Resume'} secondary onPress={()=>void changeRecurrence(rec,rec.state==='ACTIVE'?'PAUSED':'ACTIVE')}/>
+     <Btn text="Skip selected date" secondary onPress={()=>void skipRecurrence(rec)}/>
+     <Btn text="Cancel" secondary onPress={()=>void changeRecurrence(rec,'CANCELLED')}/>
+    </View>}</View>)}
+   </>}
   </View>}</>}
   {['Cutting','Packing','Delivery'].includes(screen)&&<Input title="Delivery date YYYY-MM-DD" value={date} onChange={setDate}/>}
-  {screen!=='Home'&&screen!=='Catalogue'&&screen!=='Place Order'&&data.map((row,index)=><View key={index} style={styles.card}>
+  {screen!=='Home'&&screen!=='Catalogue'&&screen!=='Place Order'&&screen!=='Recurring'&&data.map((row,index)=><View key={index} style={styles.card}>
    {Object.entries(row as Record<string,unknown>).filter(([key])=>!['password_hash','token_hash'].includes(key)).slice(0,13).map(([key,value])=>
     <View key={key} style={styles.detail}><Text style={styles.muted}>{key.replaceAll('_',' ')}</Text><Text style={styles.value}>{typeof value==='object'?JSON.stringify(value):String(value??'—')}</Text></View>)}
   </View>)}
