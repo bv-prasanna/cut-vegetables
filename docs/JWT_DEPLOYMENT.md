@@ -102,7 +102,7 @@ For web local testing with secure API, build the secure portal using the correct
 Use `render.yaml` in the repository or configure a Web Service manually:
 - Repository `bv-prasanna/cut-vegetables`, branch `feat/typescript-platform-foundation`.
 - Root: repository root.
-- Build: `npm install --no-audit --no-fund && npm run typecheck`.
+- Build: `npm install --include=dev --no-audit --no-fund && npm run typecheck`.
 - Start: `npm run api:prod`.
 - Health: `/health`.
 - Environment: `NODE_ENV=production`, `HOST=0.0.0.0`, `DATABASE_URL=<Neon TLS URL>`, `JWT_SECRET=<generated secret>`, `ALLOWED_ORIGINS=https://<your-pages-project>.pages.dev`.
@@ -116,7 +116,7 @@ After deployment, check HTTPS `/health`, POST `/auth/login`, GET `/v1/me` with B
 - Connect the same repository to Cloudflare Pages.
 - Branch: preview on `feat/typescript-platform-foundation`, production branch later when verified.
 - **Root directory:** repository root.
-- Build: `npm install --no-audit --no-fund && npm run web:build`.
+- Build: `npm install --include=dev --no-audit --no-fund && npm run web:build`.
 - Output directory: `apps/web/dist`.
 - Build environment: `VITE_API_BASE_URL=https://your-actual-render-service.onrender.com`; `VITE_ENABLE_DEMO=false`; Node 22.
 - In Render's `ALLOWED_ORIGINS`, include exactly the real HTTPS origin of the Pages deployment, plus your custom domain if any. Do not use wildcard CORS.

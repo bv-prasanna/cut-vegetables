@@ -6,7 +6,7 @@ services:
     plan: free
     region: singapore
     branch: feat/typescript-platform-foundation
-    buildCommand: npm install --no-audit --no-fund && npm run typecheck
+    buildCommand: npm install --include=dev --no-audit --no-fund && npm run typecheck
     startCommand: npm run api:prod
     healthCheckPath: /health
     envVars:
