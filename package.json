@@ -9,7 +9,9 @@
     "web:test": "npm run test --workspace @freshprep/web",
     "web:build": "npm run build --workspace @freshprep/web",
     "api:prod": "npm run start:pg --workspace @freshprep/api",
-    "check": "npm run typecheck && npm test && npm run web:test && npm run web:build"
+    "check": "npm run typecheck && npm test && npm run web:test && npm run web:build",
+    "mobile:check": "npm --prefix apps/mobile run typecheck && npm --prefix apps/mobile run test",
+    "verify:local": "npm run check && npm run mobile:check"
   },
   "workspaces": [
     "apps/api",
