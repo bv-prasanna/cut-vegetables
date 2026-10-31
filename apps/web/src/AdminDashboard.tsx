@@ -1,0 +1,47 @@
+import React,{useEffect,useMemo,useState} from 'react';
+import './admin-dashboard.css';
+type DemoOrder={id:string;state:string;slotId:string;deliveryDate:string;items:{variantId:string;grams:number}[];totalPaise:number;createdAt:string};
+type Summary={
+ demo:boolean;metrics:{variants:number;vegetables:number;orders:number;recurringSchedules:number;deliverySlots:number;demoOrderValuePaise:number};
+ stateCounts:Record<string,number>;
+ preparation:{name:string;count:number}[];
+ slotLoad:{id:string;label:string;capacityOrders:number;reserved:number}[];
+ recentOrders:DemoOrder[];
+ schedules:{id:string;frequency:string;weekdays:number[];startDate:string;slotId:string}[];
+};
+type Role={role:string;permissions:readonly string[]};
+type Tab='Overview'|'Orders'|'Production'|'Delivery'|'Permissions';
+const rupees=(p:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(p/100);
+const initials=(value:string)=>value.split('_').map(x=>x[0]).join('').slice(0,3);
+const tabs:Tab[]=['Overview','Orders','Production','Delivery','Permissions'];
+const transitions:Record<string,string>={CONFIRMED:'IN_PRODUCTION',IN_PRODUCTION:'QC_PASSED',QC_PASSED:'PACKED',PACKED:'DISPATCHED',DISPATCHED:'DELIVERED'};
+async function load<T>(path:string,method='GET',body?:unknown):Promise<T>{
+ const res=await fetch('/api'+path,{method,headers:body?{'content-type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});
+ const data=await res.json();if(!res.ok)throw Error(data.error||'Unable to load dashboard');return data as T;
+}
+export default function AdminDashboard(){
+ const[summary,setSummary]=useState<Summary|null>(null),[roles,setRoles]=useState<Role[]>([]);
+ const[tab,setTab]=useState<Tab>('Overview'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[filter,setFilter]=useState('All'),[search,setSearch]=useState(''),[showPermissions,setShowPermissions]=useState(false);
+ async function refresh(){setBusy(true);try{const[s,r]=await Promise.all([load<Summary>('/dev/admin/dashboard'),load<Role[]>('/dev/admin/roles')]);setSummary(s);setRoles(r);setError('');}catch(e){setError(e instanceof Error?e.message:'Dashboard unavailable')}finally{setBusy(false)}}
+ useEffect(()=>{void refresh()},[]);
+ const orders=useMemo(()=>summary?.recentOrders.filter(o=>(filter==='All'||o.state===filter)&&(o.id.toLowerCase().includes(search.toLowerCase())||o.deliveryDate.includes(search)))||[],[summary,filter,search]);
+ const gross=summary?.metrics.demoOrderValuePaise||0;
+ const prepMax=Math.max(1,...(summary?.preparation||[]).map(x=>x.count));
+ return <section className="fp-ops-dashboard" aria-label="FreshPrep operations dashboard">
+ <div className="fp-ops-title"><div><div className="fp-ops-kicker">OPERATIONS CONTROL CENTRE</div><h2>Admin Dashboard</h2><p>Catalogue, ordering, processing and delivery insights for the current local demonstration session.</p></div><button disabled={busy} onClick={()=>void refresh()} className="fp-ops-refresh">{busy?'Refreshing…':'↻ Refresh data'}</button></div>
+ <div className="fp-ops-warning" role="note"><b>Development data only.</b> Revenue is calculated from demo orders, not actual payments. Production, QC, dispatch and user access shown here are not yet live business operations.</div>
+ {error&&<div className="fp-ops-error" role="alert">{error}</div>}
+ <div className="fp-ops-kpis"><article><small>Vegetable variants</small><strong>{summary?.metrics.variants??'—'}</strong><span>{summary?.metrics.vegetables??0} vegetables configured</span></article><article><small>Orders recorded</small><strong>{summary?.metrics.orders??'—'}</strong><span>{summary?.stateCounts.CONFIRMED??0} awaiting production</span></article><article><small>Recurring schedules</small><strong>{summary?.metrics.recurringSchedules??'—'}</strong><span>Daily and selected weekdays</span></article><article><small>Delivery windows</small><strong>{summary?.metrics.deliverySlots??'—'}</strong><span>Configured slot capacity</span></article><article><small>Demo order value</small><strong>{rupees(gross)}</strong><span>Not collected revenue</span></article></div>
+ <nav className="fp-ops-tabs" aria-label="Admin reporting sections">{tabs.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>setTab(t)}>{t}</button>)}</nav>
+ {tab==='Overview'&&<div className="fp-ops-grid">
+ <section className="fp-ops-card"><h3>Product preparation mix</h3><p>Configured saleable variants by processing type.</p>{(summary?.preparation||[]).length?summary!.preparation.map(item=><div className="fp-ops-bar" key={item.name}><span>{item.name.toLowerCase()}</span><div className="fp-ops-track"><i style={{width:(item.count/prepMax*100)+'%'}}/></div><b>{item.count}</b></div>):<p>No product data loaded.</p>}</section>
+ <section className="fp-ops-card"><h3>Order progress</h3><p>Stages are based on current demo order status.</p>{Object.entries(summary?.stateCounts||{}).map(([status,count])=><div className="fp-ops-line" key={status}><span>{status.replaceAll('_',' ')}</span><b>{count}</b></div>)}</section>
+ <section className="fp-ops-card"><h3>Delivery capacity</h3><p>Current demo reservations by delivery window (across stored dates).</p>{summary?.slotLoad.map(slot=><div className="fp-slot-usage" key={slot.id}><div><b>{slot.label}</b><span>{slot.reserved} / {slot.capacityOrders} orders</span></div><progress value={Math.min(slot.reserved,slot.capacityOrders)} max={slot.capacityOrders}/></div>)}</section>
+ <section className="fp-ops-card"><h3>What needs attention</h3><div className="fp-ops-alert"><span>01</span><div><b>Confirm all product images</b><small>Current samples are illustrative, not cut-specific photos.</small></div></div><div className="fp-ops-alert"><span>02</span><div><b>Connect secure PostgreSQL workflows</b><small>Current order and recurring schedule data resets on restart.</small></div></div><div className="fp-ops-alert"><span>03</span><div><b>Complete operational checkpoints</b><small>Procurement, production, QC, packing and POD must use authenticated workflows.</small></div></div></section>
+ </div>}
+ {tab==='Orders'&&<section className="fp-ops-card fp-ops-table"><div className="fp-ops-table-heading"><div><h3>Recent orders</h3><p>Order details are generated only when a demo user places an order.</p></div><div><input aria-label="Find order" placeholder="Order ID or date" value={search} onChange={e=>setSearch(e.target.value)}/><select aria-label="Filter status" value={filter} onChange={e=>setFilter(e.target.value)}><option>All</option>{Object.keys(summary?.stateCounts||{}).map(x=><option key={x}>{x}</option>)}</select></div></div><div className="fp-ops-table-scroll"><table><thead><tr><th>Order</th><th>Delivery date</th><th>Items</th><th>Amount</th><th>Stage</th><th>Next stage</th></tr></thead><tbody>{orders.map(o=><tr key={o.id}><td><code>{o.id.slice(0,10)}</code></td><td>{o.deliveryDate}</td><td>{o.items.length}</td><td>{rupees(o.totalPaise)}</td><td><span className="fp-stage">{o.state.replaceAll('_',' ')}</span></td><td>{transitions[o.state]?'Requires verified operator/QC workflow':'—'}</td></tr>)}</tbody></table>{!orders.length&&<div className="fp-ops-no-data">No matching demo orders.</div>}</div></section>}
+ {tab==='Production'&&<div className="fp-ops-grid"><section className="fp-ops-card"><h3>Production planning</h3><p>Orders that would require a cutting/processing work order.</p><div className="fp-ops-big">{(summary?.stateCounts.CONFIRMED||0)+(summary?.stateCounts.IN_PRODUCTION||0)}</div><p>Open or in-progress order records.</p><div className="fp-ops-warning">Work-order assignment, material allocations, input/output weighing and yield reconciliation are still under development.</div></section><section className="fp-ops-card"><h3>Quality and packing checkpoints</h3><div className="fp-ops-line"><span>QC passed (demo status)</span><b>{summary?.stateCounts.QC_PASSED||0}</b></div><div className="fp-ops-line"><span>Packed (demo status)</span><b>{summary?.stateCounts.PACKED||0}</b></div><p>Actual QC forms, temperature readings, batch labels, expiry and stock movements require API integration.</p></section></div>}
+ {tab==='Delivery'&&<div className="fp-ops-grid"><section className="fp-ops-card"><h3>Dispatch planning</h3><p>Orders marked ready or dispatched in the demo system.</p><div className="fp-ops-big">{(summary?.stateCounts.PACKED||0)+(summary?.stateCounts.DISPATCHED||0)}</div><p>Driver assignments and proof-of-delivery GPS are release blockers.</p></section><section className="fp-ops-card"><h3>Configured delivery slots</h3>{summary?.slotLoad.map(s=><div className="fp-ops-line" key={s.id}><span>{s.label}</span><b>{s.capacityOrders} capacity</b></div>)}<p>Real route optimization, assigned delivery stops and cold-chain monitoring are not connected.</p></section></div>}
+ {tab==='Permissions'&&<section className="fp-ops-card"><div className="fp-ops-table-heading"><div><h3>Role permission matrix</h3><p>Backend policy definitions; actual login and endpoint enforcement are separate requirements.</p></div><button className="fp-ops-refresh" onClick={()=>setShowPermissions(v=>!v)}>{showPermissions?'Compact view':'Show permissions'}</button></div><div className="fp-ops-roles">{roles.map(r=><div className="fp-ops-role" key={r.role}><div className="fp-role-avatar">{initials(r.role)}</div><div><b>{r.role.replaceAll('_',' ')}</b><small>{showPermissions?r.permissions.join(' · '):r.permissions.length+' defined permissions'}</small></div></div>)}</div></section>}
+ </section>;
+}
