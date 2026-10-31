@@ -90,7 +90,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  const availableTabs=[...(canAdmin?['Overview','Staff','Customers']:['Overview']),...(canCut?['Cutting']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[])] as (typeof tab)[];
  return <div className="fp-secure">
  <header className="fp-secure-header"><button onClick={onHome} className="fp-secure-brand">❧ FreshPrep <small>Veggies</small></button><div><span>SECURE BUSINESS PORTAL</span>{session&&<button onClick={()=>void logout()}>Sign out</button>}</div></header>
- {!session?<div className="fp-login-layout"><div className="fp-login-story"><span>FRESHPREP OPERATIONS</span><h1>One platform.<br/>Every kitchen.<br/>Every role.</h1><p>Sign in to manage staff, customer kitchens and operational workboards.</p><div>Encrypted JWT sessions · Verified permissions · Organisation-scoped data</div></div>
+ {!session?<div className="fp-login-layout"><div className="fp-login-story"><span>FRESHPREP OPERATIONS</span><h1>One platform.<br/>Every kitchen.<br/>Every role.</h1><p>Sign in to manage staff, customer kitchens and operational workboards.</p><div>Signed JWTs · Database-verified permissions · Organisation-scoped access</div></div>
  <form className="fp-login-form" onSubmit={e=>void login(e)}><h2>Welcome back</h2><p>Use the account created through the Super Admin bootstrap or the Admin portal.</p>
  <label>Email address<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} autoComplete="username"/></label>
  <label>Password<input type="password" required minLength={12} value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password"/></label>
