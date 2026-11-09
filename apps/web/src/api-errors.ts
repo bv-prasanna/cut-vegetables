@@ -58,6 +58,8 @@ export async function apiRequest<T>(base:string,path:string,
   const obj=data&&typeof data==='object'?data as Record<string,unknown>:{};
   const correlationId=response.headers.get('X-Correlation-ID')||
     (typeof obj.correlationId==='string'?obj.correlationId:undefined);
+  if(response.status===401&&path==='/auth/login')
+   throw new FriendlyApiError('ACCESS_DENIED',401,'Email, password or organisation ID is incorrect.',correlationId||undefined);
   throw messageForStatus(response.status,obj.error||obj.message,correlationId||undefined);
  }
  if(data===null)throw new FriendlyApiError('REQUEST_FAILED',response.status,'The server sent an unreadable response.');

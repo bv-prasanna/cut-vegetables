@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {validateApiBase,isSecureMobileRelease,screenPermissions,sizeDescription} from './secure-api';
+import {validateApiBase,isSecureMobileRelease,screenPermissions,sizeDescription,nextQuantity,mobileStatusMessage} from './secure-api';
 describe('secure mobile environment',()=>{
  it('requires an explicit API URL and HTTPS for public hosts',()=>{
   expect(()=>validateApiBase(undefined)).toThrow('EXPO_PUBLIC_API_URL');
@@ -24,6 +24,15 @@ describe('secure mobile environment',()=>{
   expect(screenPermissions(['DRIVER'])).toContain('Delivery');
   expect(screenPermissions(['DRIVER'])).not.toContain('Place Order');
   expect(screenPermissions(['DRIVER'])).not.toContain('Recurring');
+ });
+ it('returns minimum-safe quantities and client-safe status messages',()=>{
+  expect(nextQuantity(0,500,250,1)).toBe(500);
+  expect(nextQuantity(500,500,250,-1)).toBe(0);
+  expect(nextQuantity(750,500,250,-1)).toBe(500);
+  expect(mobileStatusMessage(401,'/auth/login','Invalid credentials')).toContain('password');
+  expect(mobileStatusMessage(401,'/v1/me','Invalid credentials')).toContain('Session expired');
+  expect(mobileStatusMessage(500,'/v1/orders','relation "users" missing')).not.toContain('relation');
+  expect(mobileStatusMessage(422,'/v1/orders','Slot full')).toBe('Slot full');
  });
  it('formats a product size with correct unit',()=>{
   expect(sizeDescription({id:'a',sku:'POTATO',vegetable:'Potato',preparation:'DICED',size_kind:'numeric',size_number:'10',size_unit:'mm',size_label:null,image_url:'',price_paise_per_kg:4500,minimum_grams:500,increment_grams:250})).toBe('10 mm');

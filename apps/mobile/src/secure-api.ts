@@ -46,17 +46,42 @@ export function sizeDescription(v:CatalogueVariant):string{
 export function firstAllowedScreen(roles:readonly string[]):string{
  return screenPermissions(roles)[0];
 }
-export async function backend<T>(base:string,path:string,token?:string,method='GET',data?:unknown):Promise<T>{
- const result=await fetch(base+path,{
-  method,headers:{...(data?{'Content-Type':'application/json'}:{}),...(token?{'Authorization':'Bearer '+token}:{})},
-  body:data?JSON.stringify(data):undefined
- });
- const payload=await result.json().catch(()=>({error:'Unexpected API response'}));
- if(!result.ok){
-  const message=String(payload?.error||'Request rejected');
-  const e=new Error(result.status===401?'Session expired or revoked. Please sign in again.':message);
-  Object.assign(e,{status:result.status});
-  throw e;
+export function nextQuantity(current:number,minimum:number,increment:number,sign:1|-1):number{
+ if(!Number.isSafeInteger(current)||current<0||!Number.isSafeInteger(minimum)||minimum<=0||
+  !Number.isSafeInteger(increment)||increment<=0)throw Error('Invalid product weight configuration');
+ if(sign===1)return current?current+increment:minimum;
+ return current<=minimum?0:Math.max(minimum,current-increment);
+}
+export function mobileStatusMessage(status:number,path:string,serverMessage:unknown):string{
+ if(status===401)return path==='/auth/login'?'Email, password or organisation ID is incorrect.':'Session expired. Sign in again.';
+ if(status===403)return 'Your account does not have permission to perform this action.';
+ if(status===429)return 'Too many attempts. Please try again later.';
+ if(status===404)return 'This record is unavailable. Refresh and try again.';
+ if(status===409)return 'This action conflicts with a previous change. Refresh and review the record.';
+ if(status>=500)return 'FreshPrep is temporarily unavailable. Please retry shortly.';
+ if(status===400||status===422){
+  const message=typeof serverMessage==='string'?serverMessage:'';
+  if(message&&message.length<=170&&!/(?:sql|postgres|server|syntax|stack|password|secret|token|relation|\/(?:usr|var)\/)/i.test(message)&&!/[<>\r\n]/.test(message))
+   return message;
+  return 'Review the entered details and try again.';
  }
+ return 'We could not complete this action. Please retry.';
+}
+export async function backend<T>(base:string,path:string,token?:string,method='GET',data?:unknown):Promise<T>{
+ let result:Response;
+ try{
+  result=await fetch(base+path,{
+   method,headers:{...(data!==undefined?{'Content-Type':'application/json'}:{}),...(token?{'Authorization':'Bearer '+token}:{})},
+   body:data===undefined?undefined:JSON.stringify(data)
+  });
+ }catch{const e=new Error('Cannot reach FreshPrep. Check your network and retry.');
+  Object.assign(e,{status:0});throw e;}
+ const payload:unknown=await result.json().catch(()=>null);
+ if(!result.ok){
+  const serverError=payload&&typeof payload==='object'?(payload as Record<string,unknown>).error:undefined;
+  const e=new Error(mobileStatusMessage(result.status,path,serverError));
+  Object.assign(e,{status:result.status});throw e;
+ }
+ if(payload===null){const e=new Error('Unexpected response. Please retry.');Object.assign(e,{status:502});throw e;}
  return payload as T;
 }

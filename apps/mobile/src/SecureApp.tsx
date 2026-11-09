@@ -3,6 +3,7 @@ import {ActivityIndicator,Alert,Pressable,ScrollView,StatusBar,StyleSheet,Text,T
 import {SafeAreaView,SafeAreaProvider} from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import WorkQueueCards from './WorkQueueCards';
+import {nextQuantity} from './secure-api';
 import {todayInIndia} from './work-queue';
 import {backend,firstAllowedScreen,screenPermissions,sizeDescription,validateApiBase,
  type Session,type Identity,type CatalogueVariant,type Kitchen,type DeliverySlot,type Order,type StaffBoardRow} from './secure-api';
@@ -123,7 +124,7 @@ function AuthenticatedMobile(){
  useEffect(()=>{void refresh();},[refresh]);
  const selected=Object.entries(cart).filter(([,g])=>g>0).map(([variantId,grams])=>({variantId,grams}));
  function increment(v:CatalogueVariant,sign:1|-1){
-  setCart(old=>({...old,[v.id]:Math.max(0,(old[v.id]||0)+sign*(old[v.id]?v.increment_grams:v.minimum_grams))}));
+  setCart(old=>({...old,[v.id]:nextQuantity(old[v.id]||0,v.minimum_grams,v.increment_grams,sign)}));
  }
  async function placeOrder(){
   if(!kitchenId||!slotId||!selected.length){Alert.alert('Order incomplete','Choose a kitchen, delivery window and at least one product.');return;}

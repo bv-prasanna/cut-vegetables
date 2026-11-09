@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import './secure-orders.css';
 import {apiRequest,FriendlyApiError} from './api-errors';
+import {nextQuantity} from './quantity';
 type Role={roles:string[]};
 type Kitchen={id:string;name:string;zone_code:string;address:string};
 type Slot={id:string;zone_code:string;label:string;start_minute:number;
@@ -69,7 +70,7 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const selectedKitchen=kitchens.find(k=>k.id===kitchen);
  const suitable=slots.filter(s=>s.zone_code===selectedKitchen?.zone_code);
  function change(v:Product,delta:1|-1){
-  setBasket(old=>{const current=old[v.id]||0;const next=delta===1?(current?current+v.increment_grams:v.minimum_grams):Math.max(0,current-v.increment_grams);return {...old,[v.id]:next};});
+  setBasket(old=>{const current=old[v.id]||0;const next=nextQuantity(current,v.minimum_grams,v.increment_grams,delta);return {...old,[v.id]:next};});
  }
  async function submit(recurring:boolean){
   if(!canWrite)return;

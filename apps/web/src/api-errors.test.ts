@@ -27,6 +27,14 @@ describe('customer-safe status and error contract',()=>{
   expect(messageForStatus(409,'Slot full').message).toBe('Slot full');
   expect(messageForStatus(401,'Invalid credentials').message).toContain('session has expired');
  });
+ it('distinguishes invalid login credentials from expired protected sessions',async()=>{
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('{"error":"Invalid credentials"}',
+   {status:401,headers:{'Content-Type':'application/json'}})));
+  await expect(apiRequest(base,'/auth/login',{method:'POST',payload:{}}))
+   .rejects.toThrow('Email, password or organisation ID is incorrect.');
+  await expect(apiRequest(base,'/v1/me',{token:'expired'}))
+   .rejects.toThrow('session has expired');
+ });
  it('converts network failures into user action',async()=>{
   vi.stubGlobal('fetch',vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
   await expect(apiRequest(base,'/v1/orders')).rejects.toMatchObject({code:'NETWORK_UNAVAILABLE'});
