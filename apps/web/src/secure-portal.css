@@ -113,3 +113,5 @@
 .fp-password-field button{border:0;background:#edf5ed;color:#245a3a;padding:0 13px;min-height:44px;font-size:12px;font-weight:800;flex:none}
 .fp-label-hint{font-weight:500;color:#789180;font-size:11px}
 @media(max-width:480px){.fp-secure-account{max-width:100px}.fp-password-field button{padding:0 10px}.fp-secure-session-note{font-size:10px}}
+
+.fp-stage-counts{display:grid;gap:7px;padding-top:7px}.fp-stage-counts>div{display:flex;align-items:center;justify-content:space-between;gap:10px}.fp-stage-counts span{font-size:12px;color:#637b68;text-transform:capitalize}.fp-stage-counts strong{font-size:15px!important;color:#1a6140}.fp-stage-empty{font-size:12px;color:#718878;line-height:1.55;padding:10px 0}.fp-readonly-role{font-size:20px!important;overflow-wrap:anywhere}.fp-secure-panels article{min-height:135px}

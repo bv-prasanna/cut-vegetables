@@ -123,3 +123,5 @@
  .fp-header-inner{gap:10px}
 }
 @media(max-width:420px){.fp-wordmark-text b{font-size:19px}.fp-wordmark-text small{font-size:10px}.fp-wordmark{flex:0 1 auto}.fp-leafmark{width:30px;margin-right:3px}.fp-mobile-menu{padding:8px}.fp-login{padding:10px 8px;font-size:10px;gap:4px}.fp-login svg{display:none}}
+
+.fp-daily-note{margin:4px 0 13px;padding:16px 15px;background:#f2f8ef;border:1px solid #d9e8d8;color:#386d45;border-radius:10px;font-size:12px;line-height:1.6}

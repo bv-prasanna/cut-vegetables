@@ -151,9 +151,14 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <div className="fp-secure-layout"><nav className="fp-secure-tabs" aria-label="Workspace navigation"><p className="fp-secure-nav-caption">WORKSPACES</p>{availableTabs.map(t=><button type="button" key={t} aria-current={tab===t?'page':undefined} className={tab===t?'active':''} onClick={()=>void openTab(t)}><span className="fp-secure-nav-icon" aria-hidden="true">{({Overview:'▦',Supply:'▤',Staff:'♧',Customers:'▣',Catalogue:'◈',Slots:'◷',Procurement:'▧',Cutting:'▥',Quality:'◆',Packing:'▨',Delivery:'↗'} as Record<string,string>)[t]}</span>{t}</button>)}<div className="fp-secure-nav-footer"><strong>FreshPrep operations</strong><span>Roles are verified with every request.</span></div></nav><main className="fp-secure-main" id="workspace-content">
  {tab==='Supply'&&session&&profile&&<CustomerOrderPortal token={session.accessToken} base={BASE} roles={profile.roles} onLogout={()=>void logout()}/>}
  {(tab==='Catalogue'||tab==='Slots')&&session&&<CatalogAdmin base={BASE} token={session.accessToken} superadmin={profile?.roles.includes('SUPERADMIN')??false} mode={tab}/>}
- {tab==='Overview'&&<section className="fp-secure-panels" aria-label="Business key metrics"><article><h3>Secure workspace</h3><p>{!hasWorkspaces?'Your role currently has no interactive workspaces. Contact your administrator for access to operational tasks.':'Access is verified against active database memberships on every request.'}</p><strong>{profile?.roles.join(', ')}</strong></article>
- {canAdmin&&<><article><h3>Active kitchens</h3><strong>{overview?.activeKitchens??'—'}</strong></article><article><h3>Team members</h3><strong>{overview?.staff??'—'}</strong></article><article><h3>Orders by stage</h3>{overview?.ordersByState.map(r=><div key={r.state}>{r.state}: {r.count}</div>)}</article></>}
- </section>}
+ {tab==='Overview'&&<section className="fp-secure-panels" aria-label="Business key metrics">
+  {canAdmin?<><article><h3>Active customer kitchens</h3><strong>{overview?.activeKitchens??'—'}</strong><p>Registered for your producer account</p></article>
+  <article><h3>Team members</h3><strong>{overview?.staff??'—'}</strong><p>Operational accounts in your organisation</p></article>
+  <article><h3>Order stages</h3>{overview?.ordersByState.length?
+  <div className="fp-stage-counts">{overview.ordersByState.map(r=><div key={r.state}><span>{r.state.replaceAll('_',' ').toLowerCase()}</span><strong>{r.count}</strong></div>)}</div>:
+  <div className="fp-stage-empty">No orders reported yet. Stages appear when customers begin ordering.</div>}</article></>:
+  <article><h3>Read-only workspace</h3><strong className="fp-readonly-role">{profile?.roles.join(', ')}</strong><p>Your role currently has no interactive workspaces. Contact your administrator for access to operational tasks.</p></article>}
+  </section>}
  {tab==='Overview'&&canAdmin&&session&&<AdminInsights base={BASE} token={session.accessToken}/>}
  {tab==='Overview'&&canAdmin&&<section className="fp-secure-card" style={{marginTop:16}}>
  <h3>Prepare upcoming deliveries</h3><p>Convert eligible customer schedules into PostgreSQL orders before slot cutoffs. Run this explicitly for the target delivery date; the free service does not guarantee background scheduling.</p>

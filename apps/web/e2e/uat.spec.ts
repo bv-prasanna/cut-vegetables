@@ -212,3 +212,13 @@ test('customer retries an uncertain checkout using the original idempotency key'
  expect(sentKeys).toHaveLength(2);
  expect(sentKeys[0]).toBe(sentKeys[1]);
 });
+
+test('daily schedule never pretends that only three weekdays are selected',async({page})=>{
+ await mockApi(page,[]);
+ await page.goto('/');
+ await expect(page.getByText('Every day is included.')).toBeVisible();
+ await expect(page.getByLabel('Selected weekdays')).toHaveCount(0);
+ await page.getByLabel('Delivery frequency').selectOption('WEEKLY');
+ await expect(page.getByLabel('Selected weekdays')).toBeVisible();
+ await expect(page.getByRole('button',{name:'Mon',exact:true})).toHaveAttribute('aria-pressed','true');
+});
