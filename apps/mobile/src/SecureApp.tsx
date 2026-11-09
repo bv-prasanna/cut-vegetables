@@ -1,9 +1,10 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
-import {ActivityIndicator,Alert,Pressable,ScrollView,StatusBar,StyleSheet,Text,TextInput,View} from 'react-native';
+import {ActivityIndicator,Alert,Image,Pressable,ScrollView,StatusBar,StyleSheet,Text,TextInput,View} from 'react-native';
 import {SafeAreaView,SafeAreaProvider} from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import WorkQueueCards from './WorkQueueCards';
 import {validateOperationInput} from './operation-validation';
+import {searchCuts,basketTotals} from './catalog-view';
 import {nextQuantity} from './secure-api';
 import {todayInIndia} from './work-queue';
 import {backend,firstAllowedScreen,screenPermissions,sizeDescription,validateApiBase,
@@ -47,6 +48,17 @@ async function captureEvent(op:Operation,subjectId:string){
   subjectId,location,details:{client:'freshprep-mobile',recordedAt:new Date().toISOString()}};
 }
 
+function ProductVisual({product}:{product:CatalogueVariant}){
+ const [failed,setFailed]=useState(false);
+ return <View style={styles.productPhoto}>
+  {product.image_url&&!failed?
+   <Image source={{uri:product.image_url}} style={styles.productImage} resizeMode="cover"
+    accessibilityLabel={product.vegetable+' '+product.preparation.toLowerCase()+' '+sizeDescription(product)}
+    onError={()=>setFailed(true)}/>:
+   <View style={styles.productFallback} accessibilityLabel="Product photograph unavailable"><Text style={styles.productFallbackLetter}>{product.vegetable.slice(0,1)}</Text></View>}
+  <View style={styles.productBadge}><Text style={styles.productBadgeText}>{product.preparation.toLowerCase()}</Text></View>
+ </View>;
+}
 function Input({title,value,onChange,secret=false,numeric=false}:{title:string;value:string;onChange:(v:string)=>void;secret?:boolean;numeric?:boolean}){
  return <View style={styles.field}><Text style={styles.label}>{title}</Text><TextInput
   value={value} onChangeText={onChange} secureTextEntry={secret}
@@ -68,6 +80,7 @@ function AuthenticatedMobile(){
  const [data,setData]=useState<unknown[]>([]),[date,setDate]=useState(todayInIndia());
  const [catalogue,setCatalogue]=useState<CatalogueVariant[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]),[slots,setSlots]=useState<DeliverySlot[]>([]);
  const [cart,setCart]=useState<Record<string,number>>({}),[kitchenId,setKitchenId]=useState(''),[slotId,setSlotId]=useState('');
+  const [catalogSearch,setCatalogSearch]=useState(''),[catalogLimit,setCatalogLimit]=useState(24);
  const [recurrences,setRecurrences]=useState<Recurrence[]>([]),[frequency,setFrequency]=useState<'DAILY'|'WEEKLY'>('WEEKLY');
  const [weekdays,setWeekdays]=useState<number[]>([1,2,3,4,5,6]);
  const [operation,setOperation]=useState<Mutation>('BATCH'),[fields,setFields]=useState<Fields>({});
@@ -124,6 +137,8 @@ function AuthenticatedMobile(){
  },[call,screen,date,identity,session]);
  useEffect(()=>{void refresh();},[refresh]);
  const selected=Object.entries(cart).filter(([,g])=>g>0).map(([variantId,grams])=>({variantId,grams}));
+ const filteredCuts=useMemo(()=>searchCuts(catalogue,catalogSearch),[catalogue,catalogSearch]);
+ const cartInfo=useMemo(()=>basketTotals(cart,catalogue),[cart,catalogue]);
  function increment(v:CatalogueVariant,sign:1|-1){
   setCart(old=>({...old,[v.id]:nextQuantity(old[v.id]||0,v.minimum_grams,v.increment_grams,sign)}));
  }
@@ -229,11 +244,32 @@ function AuthenticatedMobile(){
   {screen==='Home'&&<View style={styles.card}><Text style={styles.heading}>Your FreshPrep workspaces</Text>
    <Text style={styles.muted}>Your menus reflect active database memberships. No local role switching is permitted.</Text>
    {screens.filter(s=>s!=='Home').map(s=><Btn key={s} text={s+' →'} secondary onPress={()=>setScreen(s)}/>)}</View>}
-  {(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')&&<>{catalogue.map(v=><View key={v.id} style={styles.card}>
-   <Text style={styles.item}>{v.vegetable} · {v.preparation.toLowerCase()} · {sizeDescription(v)}</Text>
-   <Text style={styles.muted}>₹{(v.price_paise_per_kg/100).toFixed(2)}/kg · min {kg(v.minimum_grams)} · step {kg(v.increment_grams)}</Text>
-   {(screen==='Place Order'||screen==='Recurring')&&identity.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))&&<View style={styles.row}><Btn text="−" secondary onPress={()=>increment(v,-1)}/><Text>{kg(cart[v.id]||0)}</Text><Btn text="+" secondary onPress={()=>increment(v,1)}/></View>}
-  </View>)}
+  {(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')&&<>
+   <View style={styles.catalogBanner}>
+    <Text style={styles.catalogKicker}>FRESHPREP · KITCHEN READY</Text>
+    <Text style={styles.catalogHeading}>The right cut for every recipe.</Text>
+    <Text style={styles.catalogText}>Choose the vegetable, cut and exact size. Prices are estimates until your order is confirmed.</Text>
+   </View>
+   <Input title="Search vegetable, preparation or size" value={catalogSearch} onChange={value=>{setCatalogSearch(value);setCatalogLimit(24);}}/>
+   <Text style={styles.catalogCount}>{filteredCuts.length} prepared variants available</Text>
+   {filteredCuts.slice(0,catalogLimit).map(v=><View key={v.id} style={styles.productCard}>
+    <ProductVisual product={v}/>
+    <View style={styles.productInfo}>
+     <Text style={styles.productTitle}>{v.vegetable} · {sizeDescription(v)}</Text>
+     <Text style={styles.productSubtitle}>{v.preparation.toLowerCase()} · SKU {v.sku}</Text>
+     <Text style={styles.productPrice}>₹{(v.price_paise_per_kg/100).toFixed(2)} / kg</Text>
+     <Text style={styles.productDetail}>Minimum {kg(v.minimum_grams)} · add in {kg(v.increment_grams)} steps</Text>
+    </View>
+    {(screen==='Place Order'||screen==='Recurring')&&identity.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))&&
+     <View style={styles.productActions}>
+      <Btn text="−" secondary onPress={()=>increment(v,-1)}/>
+      <Text style={styles.productQuantity}>{kg(cart[v.id]||0)}</Text>
+      <Btn text="+" secondary onPress={()=>increment(v,1)}/>
+     </View>}
+   </View>)}
+   {filteredCuts.length===0&&<View style={styles.emptyProducts}><Text style={styles.item}>No matching preparations</Text><Text style={styles.muted}>Try a different vegetable, cut or size, or ask your account manager to publish the SKU.</Text></View>}
+   {catalogLimit<filteredCuts.length&&<Btn secondary text={'Load more variants ('+(filteredCuts.length-catalogLimit)+' remaining)'} onPress={()=>setCatalogLimit(n=>n+24)}/>}
+
   {(screen==='Place Order'||screen==='Recurring')&&<View style={styles.card}><Text style={styles.heading}>Delivery details</Text>
    <Input title="Delivery date YYYY-MM-DD" value={date} onChange={setDate}/>
    <Text style={styles.label}>Choose kitchen</Text>{kitchens.map(k=><Btn key={k.id} secondary={kitchenId!==k.id} text={k.name+' · '+k.zone_code} onPress={()=>setKitchenId(k.id)}/>)}
@@ -243,7 +279,7 @@ function AuthenticatedMobile(){
     <View style={styles.row}><Btn text="Daily" secondary={frequency!=='DAILY'} onPress={()=>setFrequency('DAILY')}/><Btn text="Selected weekdays" secondary={frequency!=='WEEKLY'} onPress={()=>setFrequency('WEEKLY')}/></View>
     {frequency==='WEEKLY'&&<View style={styles.row}>{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day,index)=><Btn key={day} text={day} secondary={!weekdays.includes(index)} onPress={()=>setWeekdays(old=>old.includes(index)?old.filter(x=>x!==index):[...old,index])}/>)}</View>}
    </>}
-   <Text style={styles.item}>{selected.length} items selected</Text>
+   <Text style={styles.item}>{cartInfo.itemCount} items · {kg(cartInfo.totalGrams)} · estimated ₹{(cartInfo.estimatedPaise/100).toFixed(2)}</Text>
    {identity.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))&&
     <Btn text={screen==='Recurring'?'Create recurring schedule':'Submit confirmed order'} disabled={loading} onPress={()=>screen==='Recurring'?void placeRecurrence():void placeOrder()}/>}
    {screen==='Recurring'&&<><Text style={styles.heading}>Saved schedules</Text>
@@ -288,6 +324,27 @@ function AuthenticatedMobile(){
 }
 export default function SecureApp(){return <SafeAreaProvider><AuthenticatedMobile/></SafeAreaProvider>;}
 const styles=StyleSheet.create({
+ catalogBanner:{backgroundColor:'#154d34',padding:23,borderRadius:18,marginBottom:12},
+ catalogKicker:{color:'#cce8ad',fontSize:10,letterSpacing:1.7,fontWeight:'900'},
+ catalogHeading:{color:'#fff',fontWeight:'900',fontSize:23,marginTop:9,marginBottom:7},
+ catalogText:{color:'#dcecdf',fontSize:12,lineHeight:19},
+ catalogCount:{fontSize:11,color:'#668572',fontWeight:'800',letterSpacing:.2,marginVertical:11},
+ productCard:{backgroundColor:'#fff',borderRadius:16,overflow:'hidden',borderWidth:1,borderColor:'#e0eae1',marginBottom:14},
+ productPhoto:{height:147,backgroundColor:'#e4f0de',position:'relative',overflow:'hidden'},
+ productImage:{width:'100%',height:'100%'},
+ productFallback:{flex:1,alignItems:'center',justifyContent:'center'},
+ productFallbackLetter:{fontSize:49,color:'#89ad82',fontWeight:'900'},
+ productBadge:{position:'absolute',bottom:10,left:10,backgroundColor:'#e7f5e3',paddingHorizontal:11,paddingVertical:5,borderRadius:6},
+ productBadgeText:{color:'#246a42',fontSize:10,fontWeight:'900',textTransform:'capitalize'},
+ productInfo:{paddingHorizontal:16,paddingTop:14,paddingBottom:11},
+ productTitle:{fontSize:16,color:'#1a5034',fontWeight:'900',marginBottom:6},
+ productSubtitle:{fontSize:11,color:'#839383',marginBottom:9},
+ productPrice:{fontSize:17,color:'#18623f',fontWeight:'900',marginBottom:4},
+ productDetail:{fontSize:10,color:'#90a192'},
+ productActions:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderTopWidth:1,borderTopColor:'#edf1eb',padding:8},
+ productQuantity:{fontSize:13,color:'#1d5d3e',fontWeight:'900'},
+ emptyProducts:{backgroundColor:'#f9fcf9',padding:22,marginBottom:12,borderRadius:12,borderWidth:1,borderColor:'#e2eae1'},
+
  idSuggestion:{alignSelf:'flex-start',borderRadius:9,borderWidth:1,borderColor:'#bfdbc5',backgroundColor:'#eaf6ee',paddingHorizontal:12,paddingVertical:10,marginTop:6,marginBottom:4},
  idSuggestionText:{fontSize:12,color:'#17613e',fontWeight:'800'},
  safe:{flex:1,backgroundColor:'#f5f9f5'},scroll:{flex:1},content:{padding:17,paddingBottom:70},brand:{fontSize:23,fontWeight:'900',color:palette.green},
