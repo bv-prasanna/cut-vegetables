@@ -156,8 +156,8 @@ export function createAdminRoutes(pool:Pool){
     "ORDER BY o.delivery_date,ds.start_minute LIMIT 30"
    ].join(' '),[org,today]),
    pool.query<{event_type:string;subject_type:string;created_at:string}>([
-    "SELECT event_type,subject_type,created_at FROM event_log",
-    "WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12"
+    "SELECT event_type,subject_type,occurred_at AS created_at FROM event_log",
+    "WHERE organization_id=$1 ORDER BY occurred_at DESC LIMIT 12"
    ].join(' '),[org])
   ]);
   const num=(value:unknown)=>Number(value??0)||0;
