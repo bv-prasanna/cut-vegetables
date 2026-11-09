@@ -81,7 +81,7 @@ export default function StaffWorkBoard({role,apiBase}:Props){
  <Text style={styles.heading}>{effective==='CUTTER'?'Orders to start':effective==='PACKER'?'Packing list by customer order':effective==='DELIVERY'?'Orders for dispatch and delivery':'Order work queue'}</Text>
  {list.length===0&&!busy&&<Text style={styles.empty}>No accepted orders in this delivery window.</Text>}
  {list.map(o=><View style={styles.card} key={o.orderId}><Text style={styles.caption}>{o.deliveryDate} · {o.slotLabel}</Text><View style={styles.quantity}><Text style={styles.item}>Order {o.orderId.slice(0,10)}</Text><Text style={styles.stage}>{o.state.replaceAll('_',' ')}</Text></View>
- {'lines' in o&&o.lines.map(item=><View style={styles.detail} key={item.variantId}><Text style={styles.description}>{item.description}</Text><Text style={styles.item}>{kg(item.grams)}</Text></View>)}
+ {'lines' in o&&Array.isArray(o.lines)&&o.lines.map((item:Pack['lines'][number])=><View style={styles.detail} key={item.variantId}><Text style={styles.description}>{item.description}</Text><Text style={styles.item}>{kg(item.grams)}</Text></View>)}
  <Text style={styles.total}>Total: {kg(o.totalGrams)}</Text>{o.state===stage[effective].from?<Pressable style={styles.action} disabled={busy} onPress={()=>void advance(o.orderId)}><Text style={styles.actionText}>{stage[effective].label}</Text></Pressable>:<Text style={styles.caption}>Awaiting required stage / already processed</Text>}</View>)}
  </View>;
 }
