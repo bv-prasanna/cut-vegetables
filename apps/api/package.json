@@ -13,7 +13,8 @@
     "db:bootstrap": "tsx src/bootstrap-admin.ts",
     "db:seed-demo": "tsx src/seed-postgres-demo.ts",
     "start:pg": "tsx src/production-index.ts",
-    "recurrence:run": "tsx src/generate-recurring.ts"
+    "recurrence:run": "tsx src/generate-recurring.ts",
+    "test:pg": "vitest run src/postgres.integration.test.ts"
   },
   "dependencies": {
     "hono": "^4.6.0",

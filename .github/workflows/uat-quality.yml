@@ -62,3 +62,43 @@ jobs:
         run: npm run typecheck
       - name: Mobile unit and negative tests
         run: npm test
+  postgres-integration:
+    name: PostgreSQL 16 - migrations, bootstrap and real order UAT
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: freshprep_ci
+          POSTGRES_PASSWORD: local_disposable_ci_password
+          POSTGRES_DB: freshprep_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U freshprep_ci -d freshprep_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://freshprep_ci:local_disposable_ci_password@127.0.0.1:5432/freshprep_ci
+      BOOTSTRAP_ORG: FreshPrep CI Producer
+      BOOTSTRAP_EMAIL: freshprep-ci-admin@example.invalid
+      BOOTSTRAP_PASSWORD: CI-only-password-never-use-in-prod-123!
+      FRESHPREP_DEMO_DB_SEED: YES_I_WANT_SAMPLE_DATA
+      FRESHPREP_PG_INTEGRATION: 'true'
+      JWT_SECRET: freshprep-ci-isolated-jwt-key-at-least-32-chars-long-123456
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Apply all migrations
+        run: npm run db:migrate --workspace @freshprep/api
+      - name: One-time Super Admin bootstrap
+        run: npm run db:bootstrap --workspace @freshprep/api
+      - name: Seed 100 illustrative products
+        run: npm run db:seed-demo --workspace @freshprep/api
+      - name: Real database lifecycle and negative tests
+        run: npm run test:pg --workspace @freshprep/api
