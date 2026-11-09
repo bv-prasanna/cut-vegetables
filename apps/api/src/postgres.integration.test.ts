@@ -37,7 +37,8 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    organizationId:producerOrg},'');
   if(r.status!==200)throw Error('Bootstrap admin login failed ('+r.status+'): '+await r.text());
   adminToken=(await r.json() as Login).accessToken;
-  deliveryDate=new Date(Date.now()+10*86400000).toISOString().slice(0,10);
+  // Use a date within the admin's rolling 7-day slot-utilisation horizon.
+  deliveryDate=new Date(Date.now()+5*86400000).toISOString().slice(0,10);
  });
  afterAll(async()=>{if(pool)await pool.end()});
  it('migrates, authenticates and loads at least 100 sample product variants',async()=>{
