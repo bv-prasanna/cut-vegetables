@@ -23,8 +23,8 @@ export default function WorkQueueCards({screen,rows,loading}:Props){
   <Text style={styles.emptyTitle}>Nothing in this work queue</Text>
   <Text style={styles.subtitle}>There are no records for the selected day and your authorised role. Try a different date or refresh.</Text></View>;
  if(screen==='Cutting'){
-  const total=rows.reduce((sum,x)=>sum+gramsOf(rowOf(x).required_grams),0);
-  const qcDone=rows.reduce((sum,x)=>sum+gramsOf(rowOf(x).qc_approved_grams),0);
+  const total=rows.reduce<number>((sum,x)=>sum+gramsOf(rowOf(x).required_grams),0);
+  const qcDone=rows.reduce<number>((sum,x)=>sum+gramsOf(rowOf(x).qc_approved_grams),0);
   return <><View style={styles.metricRow}><Big label="TOTAL CUTTING" value={kgOf(total)}/><Big label="QC APPROVED" value={kgOf(qcDone)}/></View>
    <Text style={styles.sectionTitle}>Consolidated items · all orders</Text>
    {rows.map((value,i)=>{const r=rowOf(value),required=gramsOf(r.required_grams),approved=gramsOf(r.qc_approved_grams);
@@ -111,7 +111,7 @@ export default function WorkQueueCards({screen,rows,loading}:Props){
  return <View style={styles.empty}><Text style={styles.emptyTitle}>No dedicated overview for this role</Text><Text style={styles.subtitle}>Choose a different authorised workspace.</Text></View>;
 }
 const styles=StyleSheet.create({
- card:{backgroundColor:'#fff',padding:17,borderRadius:16,borderWidth:1,borderColor:colors.border,marginBottom:11},
+ cardHead:{marginBottom:8},card:{backgroundColor:'#fff',padding:17,borderRadius:16,borderWidth:1,borderColor:colors.border,marginBottom:11},
  topRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',gap:12},
  grow:{flex:1},right:{alignItems:'flex-end',minWidth:80},kicker:{fontSize:10,fontWeight:'800',letterSpacing:1.2,color:'#679879',textTransform:'uppercase',marginBottom:7},
  title:{fontSize:16,fontWeight:'800',color:colors.ink,lineHeight:22,marginBottom:5},
