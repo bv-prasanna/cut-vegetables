@@ -116,7 +116,7 @@ test('admin: dashboard, staff, customers, catalogue and slots all mount without 
  await page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('button',{name:'Catalogue'}).click();
  await expect(page.getByRole('heading',{name:'Product Master'})).toBeVisible();
  await page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('button',{name:'Slots'}).click();
- await expect(page.getByRole('heading',{name:'Delivery Windows'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Delivery Windows',exact:true})).toBeVisible();
  expect(errors).toEqual([]);
 });
 test('customer: role-scoped buying catalogue has no admin overview or staff controls',async({page},info)=>{
