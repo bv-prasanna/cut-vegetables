@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {apiRequest} from './api-errors';
 type Vegetable={id:string;name:string;active:boolean};
 type Variant={id:string;sku:string;vegetable_id:string;vegetable:string;method_code:string;size_kind:string;
  size_number:string|null;size_unit:string|null;size_label:string|null;price_paise_per_kg:number;
@@ -8,12 +9,7 @@ type DeliverySlot={id:string;zone_code:string;label:string;start_minute:number;e
 type Props={base:string;token:string;superadmin:boolean;mode:'Catalogue'|'Slots'};
 const money=(value:number)=>'₹'+(value/100).toFixed(2);
 async function api<T>(base:string,token:string,path:string,method='GET',data?:unknown):Promise<T>{
- const r=await fetch(base+path,{method,headers:{
-  Authorization:'Bearer '+token,...(data?{'Content-Type':'application/json'}:{})
- },body:data?JSON.stringify(data):undefined,cache:'no-store'});
- const v=await r.json().catch(()=>({error:'Unexpected response'}));
- if(!r.ok)throw Error(v.error||'Request rejected');
- return v as T;
+ return apiRequest<T>(base,path,{token,method,payload:data});
 }
 export default function CatalogAdmin({base,token,superadmin,mode}:Props){
  const[vegetables,setVegetables]=useState<Vegetable[]>([]),[variants,setVariants]=useState<Variant[]>([]),[slots,setSlots]=useState<DeliverySlot[]>([]);

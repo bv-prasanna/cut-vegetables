@@ -2,6 +2,7 @@ import React,{useState} from 'react';
 import './secure-portal.css';
 import CustomerOrderPortal from './CustomerOrderPortal';
 import CatalogAdmin from './CatalogAdmin';
+import {apiRequest} from './api-errors';
 type Session={accessToken:string;tokenType:string;expiresInSeconds:number};
 type Profile={userId:string;organizationId:string;roles:string[]};
 type Overview={staff:number;activeKitchens:number;ordersByState:{state:string;count:number}[]};
@@ -10,13 +11,7 @@ type Kitchen={kitchen_id:string;kitchen_name:string;organization_name:string;add
 type Task={delivery_date?:string;deliveryDate?:string;slot_label?:string;slotLabel?:string;vegetable?:string;preparation?:string;size?:string;required_grams?:number;order_count?:number;state?:string;order_id?:string};
 const BASE=(import.meta.env.VITE_API_BASE_URL||'/api').replace(/\/$/,'');
 async function request<T>(path:string,token?:string,method='GET',payload?:unknown):Promise<T>{
- const response=await fetch(BASE+path,{
-  method,headers:{...(payload?{'Content-Type':'application/json'}:{}),...(token?{Authorization:'Bearer '+token}:{})},
-  body:payload?JSON.stringify(payload):undefined,cache:'no-store'
- });
- const body=await response.json().catch(()=>({error:'Unexpected response'}));
- if(!response.ok)throw new Error(body.error||'Request rejected ('+response.status+')');
- return body as T;
+ return apiRequest<T>(BASE,path,{token,method,payload});
 }
 const allowedRoles=['ADMIN','SALES','PROCUREMENT','STORE','OPERATOR','PRODUCTION_SUPERVISOR','QC','PACKER','DISPATCH','DRIVER','FINANCE','MARKETING','AUDITOR'];
 export default function SecurePortal({onHome}:{onHome:()=>void}){
@@ -50,7 +45,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  }
  async function logout(){
   const token=session?.accessToken;setSession(null);setProfile(null);setOverview(null);setStaff([]);setKitchens([]);setTasks([]);
-  setMessage('Signed out locally.');setError('');
+  setMessage('Signed out.');setError('');
   if(token)await request('/v1/logout',token,'POST').catch(()=>{});
  }
  async function reloadAdmin(token:string){
@@ -111,16 +106,16 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <button type="submit" disabled={busy}>{busy?'Signing in…':'Sign in securely →'}</button>
  <small>Access is granted only to registered organisation members. Public signup and password recovery are not enabled.</small></form></div>:
  <div className="fp-secure-workspace">
- <div className="fp-secure-intro"><div><span>WORKSPACE · {profile?.organizationId.slice(0,8)}</span><h1>Operations centre</h1><p>Roles: {profile?.roles.join(' · ')}</p></div><button onClick={()=>void logout()}>Secure logout</button></div>
+ <div className="fp-secure-intro"><div><span>FRESHPREP  /  TEAM WORKSPACE  /  {profile?.organizationId.slice(0,8)}</span><h1>{tab==='Supply'?'Your kitchen, always prepared':tab==='Overview'?'Business overview':tab==='Cutting'?'Production planning':tab==='Packing'?'Packing operations':tab==='Delivery'?'Delivery control':tab==='Staff'?'Team management':tab==='Customers'?'Customer network':tab==='Catalogue'?'Product catalogue':'Delivery configuration'}</h1><p>Your authorised workspace · {profile?.roles.join(' · ')}</p></div><div className="fp-secure-intro-actions"><span className="fp-secure-live"><i/> Database connected</span><button type="button" onClick={()=>void logout()}>Sign out</button></div></div>
  {error&&<p role="alert" className="fp-error">{error}</p>}{message&&<p role="status" className="fp-notice">{message}</p>}
- <nav className="fp-secure-tabs">{availableTabs.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>void openTab(t)}>{t}</button>)}</nav>
+ <div className="fp-secure-layout"><nav className="fp-secure-tabs" aria-label="Workspace navigation"><p className="fp-secure-nav-caption">WORKSPACES</p>{availableTabs.map(t=><button type="button" key={t} aria-current={tab===t?'page':undefined} className={tab===t?'active':''} onClick={()=>void openTab(t)}><span className="fp-secure-nav-icon" aria-hidden="true">{({Overview:'▦',Supply:'▤',Staff:'♧',Customers:'▣',Catalogue:'◈',Slots:'◷',Cutting:'▥',Packing:'▨',Delivery:'↗'} as Record<string,string>)[t]}</span>{t}</button>)}<div className="fp-secure-nav-footer"><strong>FreshPrep operations</strong><span>Roles are verified with every request.</span></div></nav><main className="fp-secure-main" id="workspace-content">
  {tab==='Supply'&&session&&profile&&<CustomerOrderPortal token={session.accessToken} base={BASE} roles={profile.roles} onLogout={()=>void logout()}/>}
  {(tab==='Catalogue'||tab==='Slots')&&session&&<CatalogAdmin base={BASE} token={session.accessToken} superadmin={profile?.roles.includes('SUPERADMIN')??false} mode={tab}/>}
- {tab==='Overview'&&<section className="fp-secure-panels"><article><h3>Access policy</h3><p>Your roles are obtained from active database memberships each request. The client cannot grant itself permissions.</p><strong>{profile?.roles.join(', ')}</strong></article>
- {canAdmin&&<><article><h3>Active customer kitchens</h3><strong>{overview?.activeKitchens??'—'}</strong></article><article><h3>Team members</h3><strong>{overview?.staff??'—'}</strong></article><article><h3>Orders by stage</h3>{overview?.ordersByState.map(r=><div key={r.state}>{r.state}: {r.count}</div>)}</article></>}
+ {tab==='Overview'&&<section className="fp-secure-panels" aria-label="Business key metrics"><article><h3>Secure workspace</h3><p>Your roles are obtained from active database memberships each request. The client cannot grant itself permissions.</p><strong>{profile?.roles.join(', ')}</strong></article>
+ {canAdmin&&<><article><h3>Active kitchens</h3><strong>{overview?.activeKitchens??'—'}</strong></article><article><h3>Team members</h3><strong>{overview?.staff??'—'}</strong></article><article><h3>Orders by stage</h3>{overview?.ordersByState.map(r=><div key={r.state}>{r.state}: {r.count}</div>)}</article></>}
  </section>}
  {tab==='Overview'&&canAdmin&&<section className="fp-secure-card" style={{marginTop:16}}>
- <h3>Recurring order generation</h3><p>Convert eligible customer schedules into PostgreSQL orders before slot cutoffs. Run this explicitly for the target delivery date; the free service does not guarantee background scheduling.</p>
+ <h3>Prepare upcoming deliveries</h3><p>Convert eligible customer schedules into PostgreSQL orders before slot cutoffs. Run this explicitly for the target delivery date; the free service does not guarantee background scheduling.</p>
  <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
  <label style={{margin:0}}>Delivery date<input type="date" value={generationDate} onChange={e=>setGenerationDate(e.target.value)}/></label>
  <button disabled={busy} onClick={()=>void generateOrders()} style={{background:'#165b38',color:'white',border:0,borderRadius:8,padding:'12px 15px',cursor:'pointer'}}>Generate due orders</button></div>
@@ -139,8 +134,8 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <label>Delivery address<input required value={address} onChange={e=>setAddress(e.target.value)}/></label>
  <label>Service zone<input required value={zoneCode} onChange={e=>setZoneCode(e.target.value)}/></label>
  <button disabled={busy}>Create customer</button></form></section><section className="fp-secure-card"><h3>Customer kitchens</h3>{kitchens.map(k=><div className="fp-secure-line" key={k.kitchen_id}><strong>{k.organization_name} — {k.kitchen_name}</strong><span>{k.address} · {k.zone_code}</span></div>)}</section></div>}
- {(['Cutting','Packing','Delivery'] as string[]).includes(tab)&&<section className="fp-secure-card"><div className="fp-secure-boardhead"><div><h3>{tab} workboard</h3><p>Live PostgreSQL records, scoped to your verified organisation and role.</p></div><label>Delivery date<input type="date" value={boardDate} onChange={e=>setBoardDate(e.target.value)}/></label><button onClick={()=>void openTab(tab)}>Refresh</button></div>
- <div className="fp-secure-table"><table><thead><tr>{['Date','Slot','Vegetable / Customer','Cut / Status','Required weight / Order'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{tasks.map((r,i)=><tr key={i}><td>{r.delivery_date||r.deliveryDate||'—'}</td><td>{r.slot_label||r.slotLabel||'—'}</td><td>{r.vegetable||'Order '+(r.order_id||'').slice(0,8)}</td><td>{r.preparation||r.state||'—'} {r.size||''}</td><td>{r.required_grams==null?'—':(Number(r.required_grams)/1000).toFixed(2)+' kg'} {r.order_count!=null?' · '+r.order_count+' orders':''}</td></tr>)}</tbody></table></div>{tasks.length===0&&<p>No records for this date and role.</p>}</section>}
- </div>}
+ {(['Cutting','Packing','Delivery'] as string[]).includes(tab)&&<section className="fp-secure-card"><div className="fp-secure-boardhead"><div><h3>{tab} workboard</h3><p>Live PostgreSQL records, scoped to your verified organisation and role.</p></div><label>Delivery date<input type="date" value={boardDate} onChange={e=>setBoardDate(e.target.value)}/></label><button type="button" disabled={busy} onClick={()=>void openTab(tab)}>{busy?'Refreshing…':'Refresh board'}</button></div>
+ <div className="fp-secure-table" role="region" aria-label="Operational work queue" tabIndex={0}><table><thead><tr>{['Date','Slot','Vegetable / Customer','Cut / Status','Required weight / Order'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{tasks.map((r,i)=><tr key={i}><td>{r.delivery_date||r.deliveryDate||'—'}</td><td>{r.slot_label||r.slotLabel||'—'}</td><td>{r.vegetable||'Order '+(r.order_id||'').slice(0,8)}</td><td>{r.preparation||r.state||'—'} {r.size||''}</td><td>{r.required_grams==null?'—':(Number(r.required_grams)/1000).toFixed(2)+' kg'} {r.order_count!=null?' · '+r.order_count+' orders':''}</td></tr>)}</tbody></table></div>{tasks.length===0&&<div className="fp-emptystate"><span aria-hidden="true">◷</span><strong>{busy?'Loading current work queue…':'No work assigned for this delivery date'}</strong><p>{busy?'Fetching the latest records.':'Try another date or refresh. Only work authorised for your organisation is shown.'}</p></div>}</section>}
+ </main></div></div>}
  </div>;
 }
