@@ -2,6 +2,8 @@ import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {ActivityIndicator,Alert,Pressable,ScrollView,StatusBar,StyleSheet,Text,TextInput,View} from 'react-native';
 import {SafeAreaView,SafeAreaProvider} from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
+import WorkQueueCards from './WorkQueueCards';
+import {todayInIndia} from './work-queue';
 import {backend,firstAllowedScreen,screenPermissions,sizeDescription,validateApiBase,
  type Session,type Identity,type CatalogueVariant,type Kitchen,type DeliverySlot,type Order,type StaffBoardRow} from './secure-api';
 
@@ -61,7 +63,7 @@ function AuthenticatedMobile(){
  const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[organizationId,setOrganizationId]=useState('');
  const [session,setSession]=useState<Session|null>(null),[identity,setIdentity]=useState<Identity|null>(null);
  const [screen,setScreen]=useState('Home'),[loading,setLoading]=useState(false),[error,setError]=useState('');
- const [data,setData]=useState<unknown[]>([]),[date,setDate]=useState(new Date().toISOString().slice(0,10));
+ const [data,setData]=useState<unknown[]>([]),[date,setDate]=useState(todayInIndia());
  const [catalogue,setCatalogue]=useState<CatalogueVariant[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]),[slots,setSlots]=useState<DeliverySlot[]>([]);
  const [cart,setCart]=useState<Record<string,number>>({}),[kitchenId,setKitchenId]=useState(''),[slotId,setSlotId]=useState('');
  const [recurrences,setRecurrences]=useState<Recurrence[]>([]),[frequency,setFrequency]=useState<'DAILY'|'WEEKLY'>('WEEKLY');
@@ -98,9 +100,10 @@ function AuthenticatedMobile(){
    if(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')path='/v1/catalog';
    if(screen==='Orders')path='/v1/orders';
    if(screen==='Cutting')path='/v1/ops/production-plan?date='+encodeURIComponent(date);
-   if(screen==='Quality'||screen==='Packing')path='/v1/ops/batches';
+   if(screen==='Quality')path='/v1/ops/batches';
+   if(screen==='Packing')path='/v1/ops/packing-board?date='+encodeURIComponent(date);
    if(screen==='Procurement')path='/v1/ops/raw-lots';
-   if(screen==='Delivery')path='/v1/ops/stops';
+   if(screen==='Delivery')path='/v1/ops/delivery-board?date='+encodeURIComponent(date);
    if(screen==='Administration')path='/v1/admin/overview';
    if(path){
     const result=await call<unknown>(path);
@@ -253,10 +256,8 @@ function AuthenticatedMobile(){
    </>}
   </View>}</>}
   {['Cutting','Packing','Delivery'].includes(screen)&&<Input title="Delivery date YYYY-MM-DD" value={date} onChange={setDate}/>}
-  {screen!=='Home'&&screen!=='Catalogue'&&screen!=='Place Order'&&screen!=='Recurring'&&data.map((row,index)=><View key={index} style={styles.card}>
-   {Object.entries(row as Record<string,unknown>).filter(([key])=>!['password_hash','token_hash'].includes(key)).slice(0,13).map(([key,value])=>
-    <View key={key} style={styles.detail}><Text style={styles.muted}>{key.replaceAll('_',' ')}</Text><Text style={styles.value}>{typeof value==='object'?JSON.stringify(value):String(value??'—')}</Text></View>)}
-  </View>)}
+  {screen!=='Home'&&screen!=='Catalogue'&&screen!=='Place Order'&&screen!=='Recurring'&&<WorkQueueCards screen={screen} rows={data} loading={loading}/>}
+ 
   {ops.length>0&&<View style={styles.card}><Text style={styles.heading}>Record verified operation</Text>
    <Text style={styles.muted}>These actions update PostgreSQL, require your actual server role and capture a consent-based location audit.</Text>
    <ScrollView horizontal contentContainerStyle={styles.row}>{ops.map(name=><Btn key={name} text={operations[name].title} secondary={action!==name} onPress={()=>{setOperation(name);setFields({})}}/>)}</ScrollView>
