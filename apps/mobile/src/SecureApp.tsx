@@ -1,10 +1,11 @@
-import React,{useCallback,useEffect,useMemo,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {ActivityIndicator,Alert,Image,Pressable,ScrollView,StatusBar,StyleSheet,Text,TextInput,View} from 'react-native';
 import {SafeAreaView,SafeAreaProvider} from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import WorkQueueCards from './WorkQueueCards';
 import {validateOperationInput} from './operation-validation';
 import {searchCuts,basketTotals} from './catalog-view';
+import {checkoutError,fingerprintOrder} from './checkout-validation';
 import {nextQuantity} from './secure-api';
 import {todayInIndia} from './work-queue';
 import {backend,firstAllowedScreen,screenPermissions,sizeDescription,validateApiBase,
@@ -80,11 +81,18 @@ function AuthenticatedMobile(){
  const [data,setData]=useState<unknown[]>([]),[date,setDate]=useState(todayInIndia());
  const [catalogue,setCatalogue]=useState<CatalogueVariant[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]),[slots,setSlots]=useState<DeliverySlot[]>([]);
  const [cart,setCart]=useState<Record<string,number>>({}),[kitchenId,setKitchenId]=useState(''),[slotId,setSlotId]=useState('');
+  const orderIntent=useRef<{fingerprint:string;key:string}|null>(null);
   const [catalogSearch,setCatalogSearch]=useState(''),[catalogLimit,setCatalogLimit]=useState(24);
  const [recurrences,setRecurrences]=useState<Recurrence[]>([]),[frequency,setFrequency]=useState<'DAILY'|'WEEKLY'>('WEEKLY');
  const [weekdays,setWeekdays]=useState<number[]>([1,2,3,4,5,6]);
  const [operation,setOperation]=useState<Mutation>('BATCH'),[fields,setFields]=useState<Fields>({});
  const screens=screenPermissions(identity?.roles||[]);
+  useEffect(()=>{
+   if(!kitchenId||!slots.length)return;
+   const zone=kitchens.find(k=>k.id===kitchenId)?.zone_code;
+   const available=slots.filter(s=>s.zone_code===zone);
+   if(!available.some(s=>s.id===slotId))setSlotId(available[0]?.id||'');
+  },[kitchenId,kitchens,slots,slotId]);
  const call=useCallback(async<T,>(path:string,method='GET',payload?:unknown):Promise<T>=>{
   if(!session)throw Error('Not signed in');
   try{return await backend<T>(base,path,session.accessToken,method,payload);}
@@ -104,7 +112,7 @@ function AuthenticatedMobile(){
   finally{setLoading(false);}
  }
  async function logout(){
-  const token=session?.accessToken;setSession(null);setIdentity(null);setData([]);setCart({});setPassword('');
+  const token=session?.accessToken;orderIntent.current=null;setSession(null);setIdentity(null);setData([]);setCart({});setPassword('');
   if(token)await backend(base,'/v1/logout',token,'POST').catch(()=>{});
  }
  const refresh=useCallback(async()=>{
@@ -143,22 +151,31 @@ function AuthenticatedMobile(){
   setCart(old=>({...old,[v.id]:nextQuantity(old[v.id]||0,v.minimum_grams,v.increment_grams,sign)}));
  }
  async function placeOrder(){
-  if(!kitchenId||!slotId||!selected.length){Alert.alert('Order incomplete','Choose a kitchen, delivery window and at least one product.');return;}
+  const invalid=checkoutError(kitchenId,slotId,date,selected,kitchens,slots,catalogue);
+  if(invalid){setError(invalid);Alert.alert('Review your order',invalid);return;}
   setLoading(true);setError('');
   try{
-   const subjectId='request-'+Date.now();
-   const ev=await captureEvent({title:'Order',path:'',method:'POST',fields:[],eventType:'ORDER_CREATED',subjectType:'ORDER'},subjectId);
-   const result=await call<{id:string}>('/v1/orders','POST',{
-    kitchenId,slotId,deliveryDate:date,idempotencyKey:subjectId+'-'+Math.random().toString(36).slice(2),items:selected,event:ev
+   const fingerprint=fingerprintOrder(kitchenId,slotId,date,selected);
+   if(!orderIntent.current||orderIntent.current.fingerprint!==fingerprint){
+    orderIntent.current={fingerprint,key:'mobile-'+Date.now()+'-'+Math.random().toString(36).slice(2)};
+   }
+   const key=orderIntent.current.key;
+   const ev=await captureEvent({title:'Order',path:'',method:'POST',fields:[],eventType:'ORDER_CREATED',subjectType:'ORDER'},key);
+   const result=await call<{id:string;replayed?:boolean}>('/v1/orders','POST',{
+    kitchenId,slotId,deliveryDate:date,idempotencyKey:key,items:selected,event:ev
    });
-   setCart({});Alert.alert('Order confirmed','Order reference: '+result.id);setScreen('Orders');
-  }catch(e){setError(e instanceof Error?e.message:'Unable to submit order');}finally{setLoading(false);}
+   orderIntent.current=null;
+   setCart({});Alert.alert('Order confirmed',result.replayed?'Existing order confirmed again: '+result.id:'Order reference: '+result.id);
+   setScreen('Orders');
+  }catch(e){setError(e instanceof Error?e.message:'Unable to submit order. Retry without changing your basket.');}
+  finally{setLoading(false);}
  }
  async function placeRecurrence(){
   if(!identity?.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))){
    Alert.alert('Read-only account','This account cannot manage delivery schedules.');return;
   }
-  if(!kitchenId||!slotId||!selected.length){Alert.alert('Schedule incomplete','Select a kitchen, slot and products.');return;}
+  const invalid=checkoutError(kitchenId,slotId,date,selected,kitchens,slots,catalogue);
+  if(invalid){setError(invalid);Alert.alert('Review your schedule',invalid);return;}
   if(frequency==='WEEKLY'&&!weekdays.length){Alert.alert('Choose weekdays','Select one or more delivery days.');return;}
   setLoading(true);setError('');
   try{

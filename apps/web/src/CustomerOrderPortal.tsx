@@ -43,6 +43,7 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const [frequency,setFrequency]=useState<'DAILY'|'WEEKLY'>('WEEKLY'),[weekdays,setWeekdays]=useState<number[]>([1,2,3,4,5,6]);
  const [status,setStatus]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const onLogoutRef=useRef(onLogout);
+ const pendingOrderRef=useRef<{fingerprint:string;key:string}|null>(null);
  useEffect(()=>{onLogoutRef.current=onLogout;},[onLogout]);
  const call=useCallback(async<T,>(path:string,method='GET',data?:unknown):Promise<T>=>{
   try{return await apiRequest<T>(base,path,{token,method,payload:data});}
@@ -87,11 +88,16 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
     });
     setStatus('Recurring schedule created: '+saved.id+'. Operations must run the generation job before cutoff.');
    }else{
-    const id=crypto.randomUUID();
-    const saved=await call<{id:string}>('/v1/orders','POST',{
-     kitchenId:kitchen,slotId:slot,deliveryDate:date,idempotencyKey:id,items:selected,event
+    const fingerprint=JSON.stringify({kitchen,slot,date,items:[...selected].sort((a,b)=>a.variantId.localeCompare(b.variantId))});
+    if(!pendingOrderRef.current||pendingOrderRef.current.fingerprint!==fingerprint){
+     pendingOrderRef.current={fingerprint,key:crypto.randomUUID()};
+    }
+    const key=pendingOrderRef.current.key;
+    const saved=await call<{id:string;replayed?:boolean}>('/v1/orders','POST',{
+     kitchenId:kitchen,slotId:slot,deliveryDate:date,idempotencyKey:key,items:selected,event
     });
-    setStatus('Order confirmed: '+saved.id);setBasket({});
+    pendingOrderRef.current=null;
+    setStatus((saved.replayed?'Existing order confirmed: ':'Order confirmed: ')+saved.id);setBasket({});
    }
    await refresh();setView('History');
   }catch(e){setError(e instanceof Error?e.message:'Unable to save');}

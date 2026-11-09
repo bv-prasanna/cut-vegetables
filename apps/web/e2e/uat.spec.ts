@@ -186,3 +186,29 @@ test('auditor has an honest read-only access state, not a blank sidebar',async({
  await expect(page.getByText('Your role currently has no interactive workspaces.')).toBeVisible();
  await expect(nav.getByRole('button',{name:'Staff'})).toHaveCount(0);
 });
+
+test('customer retries an uncertain checkout using the original idempotency key',async({page,context})=>{
+ await context.grantPermissions(['geolocation']);
+ await context.setGeolocation({latitude:12.9716,longitude:77.5946,accuracy:30});
+ await mockApi(page,['CUSTOMER_BUYER']);
+ const sentKeys:string[]=[];
+ await page.route('**/api/v1/orders',async route=>{
+  if(route.request().method()!=='POST')return route.fallback();
+  const payload=route.request().postDataJSON() as {idempotencyKey:string};
+  sentKeys.push(payload.idempotencyKey);
+  return route.fulfill({status:sentKeys.length===1?503:200,contentType:'application/json',
+   body:sentKeys.length===1?'{"error":"simulated post-commit network failure"}':
+    '{"id":"99999999-9999-4999-8999-999999999999","replayed":true}'});
+ });
+ await page.goto('/');await signin(page);
+ await expect(page.getByRole('heading',{name:'Prepared vegetables'})).toBeVisible();
+ await page.getByRole('button',{name:'Increase Carrot'}).click();
+ await page.getByLabel('Delivery date').fill(DATE);
+ await page.getByLabel('Delivery window').selectOption(SLOT);
+ await page.getByRole('button',{name:'Confirm order'}).click();
+ await expect(page.getByRole('alert')).toContainText('temporarily unavailable');
+ await page.getByRole('button',{name:'Confirm order'}).click();
+ await expect(page.locator('.fp-customer-ok')).toContainText('Existing order confirmed');
+ expect(sentKeys).toHaveLength(2);
+ expect(sentKeys[0]).toBe(sentKeys[1]);
+});
