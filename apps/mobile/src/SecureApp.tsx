@@ -3,6 +3,7 @@ import {ActivityIndicator,Alert,Pressable,ScrollView,StatusBar,StyleSheet,Text,T
 import {SafeAreaView,SafeAreaProvider} from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import WorkQueueCards from './WorkQueueCards';
+import {validateOperationInput} from './operation-validation';
 import {nextQuantity} from './secure-api';
 import {todayInIndia} from './work-queue';
 import {backend,firstAllowedScreen,screenPermissions,sizeDescription,validateApiBase,
@@ -175,12 +176,10 @@ function AuthenticatedMobile(){
   finally{setLoading(false);}
  }
  async function submitAction(){
-  const op=operations[operation];
-  const required=op.fields.filter(x=>!['supplierLot','notes','temperatureC'].includes(x.key));
-  if(required.some(x=>!fields[x.key]?.trim())){Alert.alert('Missing fields','Complete the required identifiers and quantities.');return;}
-  if(operation==='QC'&&!['true','false'].includes((fields.passed||'').toLowerCase())){
-   Alert.alert('QC result required','Enter true for pass or false for reject.');return;
-  }
+  // Validate the current screen action, not a stale previous tab selection.
+  const op=operations[action];
+  const invalid=validateOperationInput(action,fields);
+  if(invalid){setError(invalid);Alert.alert('Review operation details',invalid);return;}
   setLoading(true);setError('');
   try{
    const {id,...body}=fields;
@@ -262,15 +261,35 @@ function AuthenticatedMobile(){
   {ops.length>0&&<View style={styles.card}><Text style={styles.heading}>Record verified operation</Text>
    <Text style={styles.muted}>These actions update PostgreSQL, require your actual server role and capture a consent-based location audit.</Text>
    <ScrollView horizontal contentContainerStyle={styles.row}>{ops.map(name=><Btn key={name} text={operations[name].title} secondary={action!==name} onPress={()=>{setOperation(name);setFields({})}}/>)}</ScrollView>
-   {operations[action].fields.map(f=><Input key={f.key} title={f.title} numeric={f.type==='number'}
-    value={fields[f.key]||''} onChange={value=>setFields(old=>({...old,[f.key]:value}))}/>)}
-   <Btn text={loading?'Recording…':'Submit '+operations[action].title} disabled={loading} onPress={()=>void submitAction()}/>
+   {operations[action].fields.map(f=>f.key==='passed'?
+    <View key="qc-result" style={styles.field}>
+     <Text style={styles.label}>Inspection decision · required</Text>
+     <View style={styles.row}>
+      <Btn text="✓ Pass QC" secondary={fields.passed!=='true'} onPress={()=>setFields(old=>({...old,passed:'true'}))}/>
+      <Btn text="✕ Reject batch" secondary={fields.passed!=='false'} onPress={()=>setFields(old=>({...old,passed:'false'}))}/>
+     </View>
+    </View>:
+    <View key={f.key}>
+     <Input title={f.title} numeric={f.type==='number'} value={fields[f.key]||''}
+      onChange={value=>setFields(old=>({...old,[f.key]:value}))}/>
+     {f.key==='id'&&['QC','PACK','COMPLETE','POD'].includes(action)&&data.map(row=>row&&typeof row==='object'&&!Array.isArray(row)?row as Record<string,unknown>:{}).filter(row=>typeof (action==='POD'?row.stop_id:row.id)==='string').slice(0,5).map((row,index)=>{
+      const id=String(action==='POD'?row.stop_id:row.id);
+      return <Pressable key={id+index} accessibilityRole="button" style={styles.idSuggestion}
+       onPress={()=>setFields(old=>({...old,id}))}>
+       <Text style={styles.idSuggestionText}>Use {action==='POD'?'assigned stop':'batch'} · {id.slice(0,8)}</Text>
+      </Pressable>;
+     })}
+    </View>)}
+   {Boolean(error)&&<Text style={styles.error} accessibilityRole="alert">{error}</Text>}
+   <Btn text={loading?'Recording…':'Confirm '+operations[action].title} disabled={loading} onPress={()=>void submitAction()}/>
   </View>}
   <Text style={styles.footer}>Live operational actions require measured physical work, correct lot/batch IDs and an active server-issued JWT. No demo or bypass role access.</Text>
  </ScrollView></SafeAreaView>;
 }
 export default function SecureApp(){return <SafeAreaProvider><AuthenticatedMobile/></SafeAreaProvider>;}
 const styles=StyleSheet.create({
+ idSuggestion:{alignSelf:'flex-start',borderRadius:9,borderWidth:1,borderColor:'#bfdbc5',backgroundColor:'#eaf6ee',paddingHorizontal:12,paddingVertical:10,marginTop:6,marginBottom:4},
+ idSuggestionText:{fontSize:12,color:'#17613e',fontWeight:'800'},
  safe:{flex:1,backgroundColor:'#f5f9f5'},scroll:{flex:1},content:{padding:17,paddingBottom:70},brand:{fontSize:23,fontWeight:'900',color:palette.green},
  header:{backgroundColor:'#fff',minHeight:62,paddingHorizontal:15,flexDirection:'row',justifyContent:'space-between',alignItems:'center'},
  role:{fontSize:10,color:'#536d59',backgroundColor:'#e6f2e5',padding:9},nav:{gap:8,padding:12,backgroundColor:'#fff'},
