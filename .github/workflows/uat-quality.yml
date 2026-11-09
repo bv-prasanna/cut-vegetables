@@ -1,0 +1,64 @@
+name: FreshPrep UAT Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+      - feat/typescript-platform-foundation
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: freshprep-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-and-web:
+    name: API and Web - typecheck, negative tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Backend TypeScript
+        run: npm run typecheck
+      - name: Backend unit and negative tests
+        run: npm test
+      - name: Web unit and negative tests
+        run: npm run web:test
+      - name: Production web build
+        run: npm run web:build
+      - name: Prevent secrets in Vite output
+        shell: bash
+        run: |
+          if grep -R -E -i '(BOOTSTRAP_PASSWORD|JWT_SECRET|DATABASE_URL)\s*=' apps/web/dist; then
+            echo 'Potential internal configuration found in web bundle' >&2
+            exit 1
+          fi
+  expo-mobile:
+    name: Expo Mobile - typecheck and negative tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Expo mobile dependencies
+        run: npm install --no-audit --no-fund
+      - name: Expo TypeScript
+        run: npm run typecheck
+      - name: Mobile unit and negative tests
+        run: npm test
