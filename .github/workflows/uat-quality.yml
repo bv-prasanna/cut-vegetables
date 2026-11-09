@@ -102,3 +102,35 @@ jobs:
         run: npm run db:seed-demo --workspace @freshprep/api
       - name: Real database lifecycle and negative tests
         run: npm run test:pg --workspace @freshprep/api
+
+  browser-uat:
+    name: Chromium - real page flows, mobile navigation and screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium and browser dependencies
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - name: Build secure production web app
+        run: npm run web:build
+        env:
+          VITE_ENABLE_DEMO: 'false'
+      - name: Run responsive browser and negative UX tests
+        run: npm run test:e2e --workspace @freshprep/web
+        env:
+          CI: 'true'
+      - name: Upload rendered page screenshots and test traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: freshprep-browser-uat-${{ github.run_number }}
+          path: |
+            apps/web/test-results/
+            apps/web/playwright-report/
+          retention-days: 14
