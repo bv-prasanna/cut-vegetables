@@ -226,4 +226,21 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    "SELECT count(*)::text AS count FROM event_log WHERE organization_id=$1 AND event_type='DELIVERY_POD_CAPTURED'",[producerOrg]);
   expect(Number(audit.rows[0].count)).toBe(1);
  });
+ it('shows only scoped live admin insights and never grants a customer report access',async()=>{
+  const staff=await request('/v1/admin/insights');
+  expect(staff.status).toBe(200);
+  const report=await staff.json() as {
+   metrics:{upcomingOrders:number;bookedValuePaise:number;exceptionOrders:number};
+   daily:{date:string;orders:number}[];
+   topCuts:{name:string;grams:number}[];
+   slots:{date:string;orders:number}[];
+   recentEvents:{event_type:string}[];
+  };
+  expect(report.metrics.bookedValuePaise).toBeGreaterThan(0);
+  expect(report.daily.some(r=>r.date===deliveryDate&&r.orders>=2)).toBe(true);
+  expect(report.topCuts.length).toBeGreaterThan(0);
+  expect(report.slots.length).toBeGreaterThan(0);
+  expect(report.recentEvents.some(r=>r.event_type==='DELIVERY_POD_CAPTURED')).toBe(true);
+  expect((await request('/v1/admin/insights','GET',undefined,customerToken)).status).toBe(403);
+ });
 });

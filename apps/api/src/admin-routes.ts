@@ -113,6 +113,65 @@ export function createAdminRoutes(pool:Pool){
   ]);
   return c.json({staff:staff.rows[0]?.count??0,activeKitchens:customers.rows[0]?.count??0,ordersByState:orders.rows});
  });
+ app.get('/admin/insights',async c=>{
+  authorizedAdmin(c);
+  const org=c.get('organizationId');
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});
+  // Producer-scoped PostgreSQL aggregation. Booked amounts are NOT recognised revenue.
+  const [summary,daily,topCuts,slots,events]=await Promise.all([
+   pool.query<{upcoming_orders:number;exception_orders:number;booked_paise:string;customer_count:number}>([
+    "SELECT COUNT(*) FILTER (WHERE delivery_date >= $2::date AND o.state NOT IN ('CANCELLED','DELIVERED'))::int AS upcoming_orders,",
+    "COUNT(*) FILTER (WHERE o.state='EXCEPTION')::int AS exception_orders,",
+    "COALESCE(SUM(COALESCE(t.amount,0)) FILTER (WHERE o.state<>'CANCELLED'),0)::text AS booked_paise,",
+    "COUNT(DISTINCT o.organization_id)::int AS customer_count",
+    "FROM orders o LEFT JOIN (SELECT order_id,SUM(line_total_paise) AS amount FROM order_items GROUP BY order_id) t ON t.order_id=o.id",
+    "WHERE o.producer_organization_id=$1"
+   ].join(' '),[org,today]),
+   pool.query<{date:string;orders:number;grams:string;booked_paise:string}>([
+    "SELECT o.delivery_date::text AS date,COUNT(*)::int AS orders,",
+    "COALESCE(SUM(t.grams),0)::text AS grams,COALESCE(SUM(t.amount),0)::text AS booked_paise",
+    "FROM orders o LEFT JOIN (SELECT order_id,SUM(grams) AS grams,SUM(line_total_paise) AS amount",
+    "FROM order_items GROUP BY order_id) t ON t.order_id=o.id",
+    "WHERE o.producer_organization_id=$1 AND o.delivery_date >= $2::date",
+    "AND o.delivery_date < ($2::date + INTERVAL '15 days') AND o.state<>'CANCELLED'",
+    "GROUP BY o.delivery_date ORDER BY o.delivery_date"
+   ].join(' '),[org,today]),
+   pool.query<{name:string;grams:string;orders:number}>([
+    "SELECT v.name||' · '||pv.method_code||' · '||",
+    "(CASE WHEN pv.size_kind='numeric' THEN pv.size_number::text||' '||pv.size_unit ELSE pv.size_label END) AS name,",
+    "SUM(oi.grams)::text AS grams,COUNT(DISTINCT o.id)::int AS orders",
+    "FROM orders o JOIN order_items oi ON oi.order_id=o.id",
+    "JOIN product_variants pv ON pv.id=oi.variant_id JOIN vegetables v ON v.id=pv.vegetable_id",
+    "WHERE o.producer_organization_id=$1 AND o.delivery_date >= $2::date",
+    "AND o.delivery_date < ($2::date + INTERVAL '15 days') AND o.state<>'CANCELLED'",
+    "GROUP BY pv.id,v.name,pv.method_code,pv.size_kind,pv.size_number,pv.size_unit,pv.size_label",
+    "ORDER BY SUM(oi.grams) DESC LIMIT 8"
+   ].join(' '),[org,today]),
+   pool.query<{date:string;label:string;orders:number;capacity:number}>([
+    "SELECT o.delivery_date::text AS date,ds.label,COUNT(*)::int AS orders,ds.capacity_orders AS capacity",
+    "FROM orders o JOIN delivery_slots ds ON ds.id=o.slot_id",
+    "WHERE o.producer_organization_id=$1 AND o.delivery_date >= $2::date",
+    "AND o.delivery_date < ($2::date + INTERVAL '8 days') AND o.state<>'CANCELLED'",
+    "GROUP BY o.delivery_date,ds.id,ds.label,ds.capacity_orders,ds.start_minute",
+    "ORDER BY o.delivery_date,ds.start_minute LIMIT 30"
+   ].join(' '),[org,today]),
+   pool.query<{event_type:string;subject_type:string;created_at:string}>([
+    "SELECT event_type,subject_type,created_at FROM event_log",
+    "WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12"
+   ].join(' '),[org])
+  ]);
+  const num=(value:unknown)=>Number(value??0)||0;
+  const m=summary.rows[0];
+  return c.json({
+   asOf:today,
+   metrics:{upcomingOrders:num(m?.upcoming_orders),exceptionOrders:num(m?.exception_orders),
+    bookedValuePaise:num(m?.booked_paise),customersWithOrders:num(m?.customer_count)},
+   daily:daily.rows.map(x=>({date:x.date,orders:num(x.orders),grams:num(x.grams),bookedPaise:num(x.booked_paise)})),
+   topCuts:topCuts.rows.map(x=>({name:x.name,grams:num(x.grams),orders:num(x.orders)})),
+   slots:slots.rows.map(x=>({date:x.date,label:x.label,orders:num(x.orders),capacity:num(x.capacity)})),
+   recentEvents:events.rows
+  });
+ });
  app.get('/delivery-slots',async c=>{
   if(!canAny(c.get('roles'),'catalog:read')&&!canAny(c.get('roles'),'orders:read'))
    return c.json({error:'Forbidden'},403);

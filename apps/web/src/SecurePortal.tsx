@@ -2,6 +2,7 @@ import React,{useState} from 'react';
 import './secure-portal.css';
 import CustomerOrderPortal from './CustomerOrderPortal';
 import CatalogAdmin from './CatalogAdmin';
+import AdminInsights from './AdminInsights';
 import {apiRequest} from './api-errors';
 type Session={accessToken:string;tokenType:string;expiresInSeconds:number};
 type Profile={userId:string;organizationId:string;roles:string[]};
@@ -114,6 +115,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  {tab==='Overview'&&<section className="fp-secure-panels" aria-label="Business key metrics"><article><h3>Secure workspace</h3><p>Your roles are obtained from active database memberships each request. The client cannot grant itself permissions.</p><strong>{profile?.roles.join(', ')}</strong></article>
  {canAdmin&&<><article><h3>Active kitchens</h3><strong>{overview?.activeKitchens??'—'}</strong></article><article><h3>Team members</h3><strong>{overview?.staff??'—'}</strong></article><article><h3>Orders by stage</h3>{overview?.ordersByState.map(r=><div key={r.state}>{r.state}: {r.count}</div>)}</article></>}
  </section>}
+ {tab==='Overview'&&canAdmin&&session&&<AdminInsights base={BASE} token={session.accessToken}/>}
  {tab==='Overview'&&canAdmin&&<section className="fp-secure-card" style={{marginTop:16}}>
  <h3>Prepare upcoming deliveries</h3><p>Convert eligible customer schedules into PostgreSQL orders before slot cutoffs. Run this explicitly for the target delivery date; the free service does not guarantee background scheduling.</p>
  <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
