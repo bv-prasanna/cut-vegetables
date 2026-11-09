@@ -103,3 +103,13 @@
  .fp-secure-intro-actions{width:100%;justify-content:space-between}
 }
 @media(prefers-reduced-motion:reduce){.fp-secure *{transition:none!important;animation:none!important}}
+
+/* UAT polish: remove duplicate logout and false connection claims. */
+.fp-secure-account{font-size:12px;max-width:28vw;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;color:#55745f;font-weight:700}
+.fp-secure-session-note{font-size:11px;color:#5e7b65;font-weight:700;background:#eaf3eb;padding:10px 13px;border:1px solid #dceadf;border-radius:99px}
+.fp-password-field{display:flex;align-items:center;border:1px solid #d8e4db;border-radius:10px;overflow:hidden;background:#fff}
+.fp-password-field:focus-within{outline:3px solid #b5dca9;outline-offset:2px}
+.fp-password-field input{flex:1;min-width:0;border:0!important;outline:0!important;box-shadow:none!important}
+.fp-password-field button{border:0;background:#edf5ed;color:#245a3a;padding:0 13px;min-height:44px;font-size:12px;font-weight:800;flex:none}
+.fp-label-hint{font-weight:500;color:#789180;font-size:11px}
+@media(max-width:480px){.fp-secure-account{max-width:100px}.fp-password-field button{padding:0 10px}.fp-secure-session-note{font-size:10px}}
