@@ -140,3 +140,49 @@ test('driver: assigned delivery only; no admin or customer orders',async({page})
  await expect(nav.getByRole('button',{name:'Overview'})).toHaveCount(0);
  await expect(page.getByText('DISPATCHED')).toBeVisible();
 });
+
+for(const entry of [
+ {role:'PROCUREMENT',heading:'Procurement & inventory',menu:'Procurement'},
+ {role:'OPERATOR',heading:'Production planning',menu:'Cutting'},
+ {role:'QC',heading:'Quality assurance',menu:'Quality'},
+ {role:'PACKER',heading:'Packing operations',menu:'Packing'}
+]){
+ test(entry.role.toLowerCase()+' operator sees a role-specific queue without unrelated administration',async({page},info)=>{
+  await mockApi(page,[entry.role]);
+  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/');await signin(page);
+  await expect(page.getByRole('heading',{name:entry.heading})).toBeVisible();
+  const navigation=page.getByRole('navigation',{name:'Workspace navigation'});
+  await expect(navigation.getByRole('button',{name:entry.menu})).toBeVisible();
+  await expect(navigation.getByRole('button',{name:'Staff'})).toHaveCount(0);
+  await expect(navigation.getByRole('button',{name:'Overview'})).toHaveCount(0);
+  await expect(page.getByText('No records for this role and delivery date')).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+  await page.screenshot({path:info.outputPath(entry.role.toLowerCase()+'-workboard.png'),fullPage:true});
+  expect(errors).toEqual([]);
+ });
+}
+test('delivery date change reloads the current work queue rather than showing yesterday’s data',async({page})=>{
+ await mockApi(page,['DRIVER']);
+ const dates:string[]=[];
+ page.on('request',request=>{
+  if(request.url().includes('/v1/ops/delivery-board?date=')){
+   dates.push(new URL(request.url()).searchParams.get('date')||'');
+  }
+ });
+ await page.goto('/');await signin(page);
+ await expect(page.getByRole('heading',{name:'Delivery control'})).toBeVisible();
+ const newDay='2026-11-19';
+ await page.getByLabel('Delivery date').fill(newDay);
+ await expect.poll(()=>dates.includes(newDay)).toBe(true);
+});
+
+test('auditor has an honest read-only access state, not a blank sidebar',async({page})=>{
+ await mockApi(page,['AUDITOR']);
+ await page.goto('/');await signin(page);
+ await expect(page.getByRole('heading',{name:'Business overview'})).toBeVisible();
+ const nav=page.getByRole('navigation',{name:'Workspace navigation'});
+ await expect(nav.getByRole('button',{name:'Overview'})).toBeVisible();
+ await expect(page.getByText('Your role currently has no interactive workspaces.')).toBeVisible();
+ await expect(nav.getByRole('button',{name:'Staff'})).toHaveCount(0);
+});

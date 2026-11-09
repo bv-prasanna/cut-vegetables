@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import './secure-portal.css';
 import CustomerOrderPortal from './CustomerOrderPortal';
 import CatalogAdmin from './CatalogAdmin';
@@ -20,7 +20,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[organizationId,setOrganizationId]=useState('');
  const[session,setSession]=useState<Session|null>(null),[profile,setProfile]=useState<Profile|null>(null);
  const[overview,setOverview]=useState<Overview|null>(null),[staff,setStaff]=useState<Staff[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]);
- const[tasks,setTasks]=useState<Task[]>([]),[boardDate,setBoardDate]=useState(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}));
+ const[tasks,setTasks]=useState<Task[]>([]),[boardDate,setBoardDate]=useState(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'})),[boardBusy,setBoardBusy]=useState(false),[boardRefresh,setBoardRefresh]=useState(0);
  const[tab,setTab]=useState<'Overview'|'Supply'|'Staff'|'Customers'|'Catalogue'|'Slots'|'Procurement'|'Cutting'|'Quality'|'Packing'|'Delivery'>('Overview');
  const[generationDate,setGenerationDate]=useState(new Date(Date.now()+86_400_000).toISOString().slice(0,10));
  const[generationSummary,setGenerationSummary]=useState<Record<string,number>|null>(null);
@@ -45,16 +45,6 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
     me.roles.includes('QC')?'Quality':me.roles.includes('OPERATOR')||me.roles.includes('PRODUCTION_SUPERVISOR')?'Cutting':
     me.roles.includes('PACKER')?'Packing':me.roles.includes('DRIVER')||me.roles.includes('DISPATCH')?'Delivery':'Overview';
    setTab(preferred);
-   if(['Procurement','Cutting','Quality','Packing','Delivery'].includes(preferred)){
-    const path=preferred==='Cutting'?'/v1/ops/production-plan':
-     preferred==='Packing'?'/v1/ops/packing-board':
-     preferred==='Delivery'?'/v1/ops/delivery-board':
-     preferred==='Quality'?'/v1/ops/batches':'/v1/ops/raw-lots';
-    try{
-     const suffix=['Procurement','Quality'].includes(preferred)?'':'?date='+encodeURIComponent(boardDate);
-     setTasks(await request<Task[]>(path+suffix,result.accessToken));
-    }catch{setError('Signed in, but your work queue could not be loaded. Use Refresh board to retry.');}
-   }
    setMessage('Signed in. JWT expires after '+Math.round(result.expiresInSeconds/60)+' minutes.');
    if(me.roles.includes('SUPERADMIN')||me.roles.includes('ADMIN')){
     try{await reloadAdmin(result.accessToken);}
@@ -78,24 +68,47 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  }
  async function run(task:()=>Promise<unknown>,success:string){
   setBusy(true);setError('');setMessage('');
-  try{await task();setMessage(success);if(session&&canAdmin)await reloadAdmin(session.accessToken);}
+  try{
+   await task();
+   setMessage(success);
+   if(session&&canAdmin){
+    try{await reloadAdmin(session.accessToken);}
+    catch{setError('The operation succeeded, but the dashboard could not be refreshed. Open Overview to retry.');}
+   }
+  }
   catch(e){
    if(e instanceof FriendlyApiError&&e.status===401){setSession(null);setProfile(null);setMessage('');}
    setError(e instanceof Error?e.message:'Request failed');
   }
   finally{setBusy(false);}
  }
+ const currentBoard=['Procurement','Cutting','Quality','Packing','Delivery'].includes(tab);
+ useEffect(()=>{
+  const token=session?.accessToken;
+  if(!token||!currentBoard)return;
+  let active=true;
+  setBoardBusy(true);setError('');setTasks([]);
+  const path=tab==='Cutting'?'/v1/ops/production-plan':
+   tab==='Packing'?'/v1/ops/packing-board':
+   tab==='Delivery'?'/v1/ops/delivery-board':
+   tab==='Quality'?'/v1/ops/batches':'/v1/ops/raw-lots';
+  const suffix=tab==='Quality'||tab==='Procurement'?'':'?date='+encodeURIComponent(boardDate);
+  void request<Task[]>(path+suffix,token)
+   .then(rows=>{if(active)setTasks(rows);})
+   .catch(error=>{
+    if(!active)return;
+    if(error instanceof FriendlyApiError&&error.status===401){
+     setSession(null);setProfile(null);setMessage('');
+    }
+    setError(error instanceof Error?error.message:'Unable to update this work queue');
+   })
+   .finally(()=>{if(active)setBoardBusy(false);});
+  return()=>{active=false;};
+ },[session?.accessToken,tab,boardDate,boardRefresh,currentBoard]);
  async function openTab(name:typeof tab){
-  setTab(name);setError('');setTasks([]);
-  if(!session||!['Procurement','Cutting','Quality','Packing','Delivery'].includes(name))return;
-  const path=name==='Cutting'?'/v1/ops/production-plan':
-   name==='Packing'?'/v1/ops/packing-board':
-   name==='Delivery'?'/v1/ops/delivery-board':
-   name==='Quality'?'/v1/ops/batches':'/v1/ops/raw-lots';
-  await run(async()=>{
-   const rows=await request<Task[]>(path+(name==='Quality'||name==='Procurement'?'':'?date='+encodeURIComponent(boardDate)),session.accessToken);
-   setTasks(rows);
-  },'Workboard loaded from PostgreSQL.');
+  setError('');
+  if(name===tab)setBoardRefresh(n=>n+1);
+  else {setTasks([]);setTab(name);}
  }
  async function generateOrders(){
   if(!session)return;
@@ -120,7 +133,8 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
    setOrgName('');setContactEmail('');setContactPassword('');setKitchenName('');setAddress('');
   },'Customer organisation and first kitchen created.');
  }
- const availableTabs=[...(canCustomer?['Supply']:[]),...(canAdmin?['Overview','Staff','Customers','Catalogue','Slots']:[]),...(canProcure?['Procurement']:[]),...(canCut?['Cutting']:[]),...(canQC?['Quality']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[])] as (typeof tab)[];
+ const hasWorkspaces=canCustomer||canAdmin||canProcure||canCut||canQC||canPack||canDeliver;
+ const availableTabs=[...(canCustomer?['Supply']:[]),...(canAdmin?['Overview','Staff','Customers','Catalogue','Slots']:!hasWorkspaces?['Overview']:[]),...(canProcure?['Procurement']:[]),...(canCut?['Cutting']:[]),...(canQC?['Quality']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[])] as (typeof tab)[];
  return <div className="fp-secure">
  <header className="fp-secure-header"><button type="button" onClick={onHome} className="fp-secure-brand" aria-label="FreshPrep home">❧ FreshPrep <small>Veggies</small></button><div><span>SECURE BUSINESS PORTAL</span>{session&&<span className="fp-secure-account">{email}</span>}</div></header>
  {!session?<div className="fp-login-layout"><div className="fp-login-story"><span>FRESHPREP OPERATIONS</span><h1>One platform.<br/>Every kitchen.<br/>Every role.</h1><p>Sign in to manage staff, customer kitchens and operational workboards.</p><div>Signed JWTs · Database-verified permissions · Organisation-scoped access</div></div>
@@ -137,7 +151,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <div className="fp-secure-layout"><nav className="fp-secure-tabs" aria-label="Workspace navigation"><p className="fp-secure-nav-caption">WORKSPACES</p>{availableTabs.map(t=><button type="button" key={t} aria-current={tab===t?'page':undefined} className={tab===t?'active':''} onClick={()=>void openTab(t)}><span className="fp-secure-nav-icon" aria-hidden="true">{({Overview:'▦',Supply:'▤',Staff:'♧',Customers:'▣',Catalogue:'◈',Slots:'◷',Procurement:'▧',Cutting:'▥',Quality:'◆',Packing:'▨',Delivery:'↗'} as Record<string,string>)[t]}</span>{t}</button>)}<div className="fp-secure-nav-footer"><strong>FreshPrep operations</strong><span>Roles are verified with every request.</span></div></nav><main className="fp-secure-main" id="workspace-content">
  {tab==='Supply'&&session&&profile&&<CustomerOrderPortal token={session.accessToken} base={BASE} roles={profile.roles} onLogout={()=>void logout()}/>}
  {(tab==='Catalogue'||tab==='Slots')&&session&&<CatalogAdmin base={BASE} token={session.accessToken} superadmin={profile?.roles.includes('SUPERADMIN')??false} mode={tab}/>}
- {tab==='Overview'&&<section className="fp-secure-panels" aria-label="Business key metrics"><article><h3>Secure workspace</h3><p>Your roles are obtained from active database memberships each request. The client cannot grant itself permissions.</p><strong>{profile?.roles.join(', ')}</strong></article>
+ {tab==='Overview'&&<section className="fp-secure-panels" aria-label="Business key metrics"><article><h3>Secure workspace</h3><p>{!hasWorkspaces?'Your role currently has no interactive workspaces. Contact your administrator for access to operational tasks.':'Access is verified against active database memberships on every request.'}</p><strong>{profile?.roles.join(', ')}</strong></article>
  {canAdmin&&<><article><h3>Active kitchens</h3><strong>{overview?.activeKitchens??'—'}</strong></article><article><h3>Team members</h3><strong>{overview?.staff??'—'}</strong></article><article><h3>Orders by stage</h3>{overview?.ordersByState.map(r=><div key={r.state}>{r.state}: {r.count}</div>)}</article></>}
  </section>}
  {tab==='Overview'&&canAdmin&&session&&<AdminInsights base={BASE} token={session.accessToken}/>}
@@ -162,7 +176,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <label>Service zone<input required value={zoneCode} onChange={e=>setZoneCode(e.target.value)}/></label>
  <button disabled={busy}>Create customer</button></form></section><section className="fp-secure-card"><h3>Customer kitchens</h3>{kitchens.map(k=><div className="fp-secure-line" key={k.kitchen_id}><strong>{k.organization_name} — {k.kitchen_name}</strong><span>{k.address} · {k.zone_code}</span></div>)}</section></div>}
  {(['Procurement','Cutting','Quality','Packing','Delivery'] as string[]).includes(tab)&&<section className="fp-secure-card"><div className="fp-secure-boardhead"><div><h3>{tab==='Procurement'?'Received raw inventory':tab==='Quality'?'Quality inspection queue':tab+' workboard'}</h3>
- <p>PostgreSQL records scoped to your verified organisation and role, with no local demo data.</p></div>{!['Procurement','Quality'].includes(tab)&&<label>Delivery date<input type="date" value={boardDate} onChange={e=>setBoardDate(e.target.value)}/></label>}<button type="button" disabled={busy} onClick={()=>void openTab(tab)}>{busy?'Refreshing…':'Refresh board'}</button></div>
+ <p>PostgreSQL records scoped to your verified organisation and role, with no local demo data.</p></div>{!['Procurement','Quality'].includes(tab)&&<label>Delivery date<input type="date" value={boardDate} onChange={e=>setBoardDate(e.target.value)}/></label>}<button type="button" disabled={boardBusy} onClick={()=>void openTab(tab)}>{boardBusy?'Refreshing…':'Refresh board'}</button></div>
  <div className="fp-secure-table" role="region" aria-label="Operational work queue" tabIndex={0}><table>
  <thead><tr>{(tab==='Procurement'?['Raw lot','Vegetable','Received','Usable','Rejected']:
  tab==='Quality'?['Batch','Status','Raw input','Output','Waste']:
@@ -181,7 +195,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <td>{r.vegetable||'Order '+(r.order_id||'').slice(0,8)}</td>
  <td>{r.preparation||r.state||'—'} {r.size||''}</td>
  <td>{r.required_grams==null?'—':(Number(r.required_grams)/1000).toFixed(2)+' kg'}
- {r.order_count!=null?' · '+r.order_count+' orders':''}</td></tr>)}</tbody></table></div>{tasks.length===0&&<div className="fp-emptystate"><span aria-hidden="true">◷</span><strong>{busy?'Loading current work queue…':'No work assigned for this delivery date'}</strong><p>{busy?'Fetching the latest records.':'Try another date or refresh. Only work authorised for your organisation is shown.'}</p></div>}</section>}
+ {r.order_count!=null?' · '+r.order_count+' orders':''}</td></tr>)}</tbody></table></div>{tasks.length===0&&<div className="fp-emptystate"><span aria-hidden="true">◷</span><strong>{boardBusy?'Loading current work queue…':'No records for this role and delivery date'}</strong><p>{boardBusy?'Fetching the latest records.':'Choose another date or use Refresh board. Access is limited to your organisation.'}</p></div>}</section>}
  </main></div></div>}
  </div>;
 }
