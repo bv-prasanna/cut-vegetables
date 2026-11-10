@@ -57,6 +57,7 @@ function ProductVisual({product}:{product:CatalogueVariant}){
     accessibilityLabel={product.vegetable+' '+product.preparation.toLowerCase()+' '+sizeDescription(product)}
     onError={()=>setFailed(true)}/>:
    <View style={styles.productFallback} accessibilityLabel="Product photograph unavailable"><Text style={styles.productFallbackLetter}>{product.vegetable.slice(0,1)}</Text></View>}
+  {product.image_url.includes('/prepared-cut/')&&<View style={styles.productDemoBadge}><Text style={styles.productDemoText}>AI demo photo</Text></View>}
   <View style={styles.productBadge}><Text style={styles.productBadgeText}>{product.preparation.toLowerCase()}</Text></View>
  </View>;
 }

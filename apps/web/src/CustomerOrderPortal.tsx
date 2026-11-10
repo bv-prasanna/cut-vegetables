@@ -31,6 +31,7 @@ function ProductPhoto({item}:{item:Product}){
  return <div className="fp-product-photo">
   {!failed&&item.image_url?<img src={item.image_url} alt={item.vegetable+' prepared '+item.preparation.toLowerCase()} loading="lazy"
     onError={()=>setFailed(true)}/>:<div className="fp-product-photo-fallback" role="img" aria-label={item.vegetable+' photo unavailable'}>{item.vegetable.slice(0,1).toUpperCase()}</div>}
+ {item.image_url.includes('/prepared-cut/')&&<span className="fp-generated-photo-tag">AI-generated demo image</span>}
  </div>;
 }
 export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){

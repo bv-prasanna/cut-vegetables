@@ -58,3 +58,7 @@
 @media(max-width:800px){.fp-customer-order{grid-template-columns:1fr}.fp-customer-checkout{position:static}.fp-customer-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}}
 @media(max-width:580px){.fp-customer-title{align-items:flex-start;flex-direction:column;padding:25px}.fp-customer-trust{gap:7px 14px}.fp-customer-metrics{grid-template-columns:1fr 1fr}.fp-customer-metrics article:last-child{grid-column:1/-1}.fp-customer-products{padding:14px}.fp-customer-filter{align-items:flex-start;flex-direction:column}.fp-customer-filter input{width:100%}.fp-customer-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.fp-product-photo{height:106px}.fp-customer-grid article{min-width:0}.fp-product-info{padding:10px}.fp-customer-tabs{gap:6px}.fp-customer-tabs button{padding:10px 12px;font-size:11px}.fp-customer-history{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.fp-customer-grid article{transition:none!important;transform:none!important}}
+
+/* Keep AI-generated demonstration photography clearly distinguished from production photographs. */
+.fp-customer .fp-product-photo{position:relative}
+.fp-generated-photo-tag{position:absolute;left:9px;bottom:9px;background:#153e30ed;color:#e7f8e8;padding:5px 8px;border-radius:5px;font-size:9px;line-height:1.2;font-weight:800;letter-spacing:.01em;max-width:calc(100% - 18px)}

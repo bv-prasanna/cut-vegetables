@@ -125,3 +125,8 @@
 @media(max-width:420px){.fp-wordmark-text b{font-size:19px}.fp-wordmark-text small{font-size:10px}.fp-wordmark{flex:0 1 auto}.fp-leafmark{width:30px;margin-right:3px}.fp-mobile-menu{padding:8px}.fp-login{padding:10px 8px;font-size:10px;gap:4px}.fp-login svg{display:none}}
 
 .fp-daily-note{margin:4px 0 13px;padding:16px 15px;background:#f2f8ef;border:1px solid #d9e8d8;color:#386d45;border-radius:10px;font-size:12px;line-height:1.6}
+
+/* Cut-specific generated demo photos: high clarity, graceful offline fallback. */
+.fp-photo-unavailable{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#ebf3e7,#c9e5cb);color:#4d855b}
+.fp-photo-unavailable span{font-size:42px;font-weight:900}.fp-photo-unavailable small{font-size:11px;font-weight:700}
+.fp-product-grid .fp-product-photo img{width:100%;height:100%;object-fit:cover}

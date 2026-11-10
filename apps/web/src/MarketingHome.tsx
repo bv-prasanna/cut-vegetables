@@ -39,12 +39,26 @@ const imageFor = (name:string,method:string) => {
  if(n.includes('cabbage'))return 'https://images.unsplash.com/photo-1594282486552-05b4d80fbb9f?auto=format&fit=crop&w=600&q=80';
  return 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80';
 };
+const demoPhoto=(file:string)=>'/images/prepared-cut/'+file;
 const previews:StoreVariant[]=[
- {id:'preview-potato',vegetable:'Potato',preparation:'DICED',size:{kind:'numeric',value:10,unit:'mm'},imageUrl:imageFor('potato','diced'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true},
- {id:'preview-onion',vegetable:'Onion',preparation:'CHOPPED',size:{kind:'numeric',value:20,unit:'mm'},imageUrl:imageFor('onion','chopped'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true},
- {id:'preview-carrot',vegetable:'Carrot',preparation:'GRATED',size:{kind:'label',value:'fine'},imageUrl:imageFor('carrot','grated'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true},
- {id:'preview-cabbage',vegetable:'Cabbage',preparation:'SHREDDED',size:{kind:'label',value:'thin'},imageUrl:imageFor('cabbage','shredded'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true}
-];
+ {id:'preview-potato',vegetable:'Potato',preparation:'DICED',size:{kind:'numeric',value:10,unit:'mm'},imageUrl:demoPhoto('potato-diced-10mm.webp'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true},
+ {id:'preview-carrot',vegetable:'Carrot',preparation:'JULIENNE',size:{kind:'numeric',value:3,unit:'mm'},imageUrl:demoPhoto('carrot-julienne-3mm.webp'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true},
+ {id:'preview-capsicum',vegetable:'Green Capsicum',preparation:'DICED',size:{kind:'numeric',value:20,unit:'mm'},imageUrl:demoPhoto('capsicum-cubes-20mm.webp'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true},
+ {id:'preview-onion',vegetable:'Onion',preparation:'SLICED',size:{kind:'numeric',value:3,unit:'mm'},imageUrl:demoPhoto('onion-sliced-3mm.webp'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true},
+ {id:'preview-cabbage',vegetable:'Cabbage',preparation:'SHREDDED',size:{kind:'numeric',value:3,unit:'mm'},imageUrl:demoPhoto('cabbage-shredded-3mm.webp'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true},
+ {id:'preview-cauliflower',vegetable:'Cauliflower',preparation:'CHOPPED',size:{kind:'numeric',value:35,unit:'mm'},imageUrl:demoPhoto('cauliflower-florets-35mm.webp'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true},
+ {id:'preview-beans',vegetable:'French Beans',preparation:'CHOPPED',size:{kind:'numeric',value:30,unit:'mm'},imageUrl:demoPhoto('beans-french-cut-30mm.webp'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true},
+ {id:'preview-beetroot',vegetable:'Beetroot',preparation:'DICED',size:{kind:'numeric',value:10,unit:'mm'},imageUrl:demoPhoto('beetroot-diced-10mm.webp'),pricePaisePerKg:0,minimumGrams:500,incrementGrams:250,active:true}
+]
+function ProductPhoto({item}:{item:StoreVariant}){
+ const [failed,setFailed]=useState(false);
+ const src=item.imageUrl||imageFor(item.vegetable,item.preparation);
+ return failed?<div className="fp-photo-unavailable" role="img" aria-label={item.vegetable+' photograph unavailable'}>
+   <span>{item.vegetable.charAt(0)}</span><small>Photo unavailable</small>
+  </div>:
+  <img src={src} loading="lazy" alt={item.vegetable+' '+item.preparation.toLowerCase()+' '+String(item.size.value)+(item.size.kind==='numeric'?' '+(item.size.unit||'mm'):'')}
+   onError={()=>setFailed(true)}/>;
+}
 function I({name,size=20}:{name:string;size?:number}) {
  const common={width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.7,strokeLinecap:'round' as const,strokeLinejoin:'round' as const,'aria-hidden':true as const};
  const shapes:Record<string,React.ReactNode>={
@@ -84,7 +98,9 @@ export default function MarketingHome({variants,slots,weekdays,onSetWeekdays,fre
   return()=>{cancelled=true;};
  },[]);
  const hero=slides[Math.min(active,slides.length-1)]||HERO_FALLBACK[0];
- const featured=variants.length?variants.filter(v=>v.active).slice(0,4):previews;
+ const preparedVariants=variants.filter(v=>v.active&&v.imageUrl.includes('/images/prepared-cut/'));
+  const ordinaryVariants=variants.filter(v=>v.active&&!v.imageUrl.includes('/images/prepared-cut/'));
+  const featured=variants.length?[...preparedVariants,...ordinaryVariants].slice(0,8):previews;
  const showPreview=!variants.length;
  const displayedSlots=slots.length?slots.slice(0,2):[
   {id:'preview-morning',label:'5 AM – 8 AM',startMinute:300,endMinute:480,cutoffDayOffset:1,cutoffMinute:1380,capacityOrders:0,active:true},
@@ -119,7 +135,7 @@ export default function MarketingHome({variants,slots,weekdays,onSetWeekdays,fre
  {notice&&<div className="fp-announcement" role="status"><I name="tag" size={17}/>{notice}</div>}
  <div className="fp-main-content"><div className="fp-shop-row">
   <section className="fp-products"><div className="fp-section-heading"><div><h2>Shop by Preparation</h2><p>Consistent cuts. Save prep time. Focus on what you do best.</p></div><button className="fp-inline-link" onClick={onCatalogue}>View full catalogue <I name="arrow" size={15}/></button></div>
-   <div className="fp-product-grid">{featured.map(v=><article className="fp-product-card" key={v.id}><div className="fp-product-photo"><img src={v.imageUrl||imageFor(v.vegetable,v.preparation)} alt={v.vegetable+' '+prettyCut(v)} loading="lazy"/>{(showPreview||v.id.startsWith('sample-'))&&<span className="fp-sample-mark">Illustrative photo</span>}</div><div className="fp-product-content"><strong>{v.vegetable}</strong><p>{prettyCut(v)}</p><div className="fp-product-buy"><b>{showPreview?'Price on request':price(v.pricePaisePerKg)+' / kg'+(v.id.startsWith('sample-')?' (demo)':'')}</b><button onClick={()=>showPreview?onCatalogue():onSelectProduct(v)}><I name="grid" size={13}/> {showPreview?'View':'Add'}</button></div></div></article>)}</div>
+   <div className="fp-product-grid">{featured.map(v=><article className="fp-product-card" key={v.id}><div className="fp-product-photo"><ProductPhoto item={v}/>{(showPreview||v.id.startsWith('sample-'))&&<span className="fp-sample-mark">{v.imageUrl.includes('/prepared-cut/')?'AI-generated demo image':'Illustrative photo'}</span>}</div><div className="fp-product-content"><strong>{v.vegetable}</strong><p>{prettyCut(v)}</p><div className="fp-product-buy"><b>{showPreview?'Price on request':price(v.pricePaisePerKg)+' / kg'+(v.id.startsWith('sample-')?' (demo)':'')}</b><button onClick={()=>showPreview?onCatalogue():onSelectProduct(v)}><I name="grid" size={13}/> {showPreview?'View':'Add'}</button></div></div></article>)}</div>
   </section>
   <section className="fp-recurrence" aria-label="Recurring ordering"><div className="fp-panel-heading"><I name="calendar" size={27}/><div><h2>Set Up Recurring Orders</h2><p>Fresh supply, your schedule. No last-minute hassle.</p></div></div><div className="fp-recurrence-widget"><b>Select Delivery Days</b>{frequency==='WEEKLY'?<div className="fp-weekdays" aria-label="Selected weekdays">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((label,i)=>{const day=(i+1)%7;return <button key={label} className={weekdays.includes(day)?'selected':''} aria-pressed={weekdays.includes(day)} onClick={()=>toggleDay(day)}>{label}</button>})}</div>:<p className="fp-daily-note">Every day is included. Choose “Every week” to select individual weekdays.</p>}<label>Delivery Frequency<select aria-label="Delivery frequency" value={frequency} onChange={e=>onSetFrequency(e.target.value as 'DAILY'|'WEEKLY')}><option value="WEEKLY">Every week</option><option value="DAILY">Daily</option></select></label><button className="fp-panel-button" onClick={onRecurring}>Create Recurring Order <I name="arrow" size={16}/></button></div></section>
   <section className="fp-delivery" id="fp-delivery"><div className="fp-panel-heading"><I name="truck" size={27}/><div><h2>Delivery Slots</h2><p>Choose a slot that works for your kitchen.</p></div></div><div className="fp-delivery-list">{displayedSlots.map((s,i)=><button className="fp-delivery-option" key={s.id} onClick={onCatalogue}><span className="fp-sun">☼</span><span><b>{s.label}</b><small><I name="clock" size={13}/> Closes {s.cutoffDayOffset?'previous day':'same day'} at {clock(s.cutoffMinute)}</small></span>{i===0&&<em>{slots.length?'Available window':'Example'}</em>}</button>)}</div></section>

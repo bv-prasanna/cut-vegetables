@@ -7,18 +7,40 @@ const images={
  general:'photo-1540420773420-3366772f4999',tomato:'photo-1546470427-e5f89d3dc1ce',broccoli:'photo-1459411621453-7b03977f4bfc',pepper:'photo-1563565375-f3fdfdbefa83'
 };
 const image=(key:keyof typeof images)=>'https://images.unsplash.com/'+images[key]+'?auto=format&fit=crop&w=720&q=80';
+
+/**
+ * AI-generated demo photos of prepared cuts, checked into this repository.
+ * This is an immutable link to the original asset commit rather than a fragile feature branch.
+ * Real inventory requires customer-approved SKU photography and verified cutting tolerances.
+ */
+const preparedAssetRoot='https://raw.githubusercontent.com/bv-prasanna/cut-vegetables/c50a5c306712475210299c878cfe4881a29ae0f4/apps/web/public/images/prepared-cut/';
+export const preparedCutDemoAssets:Readonly<Record<string,string>>={
+ 'Potato|DICED|10':'potato-diced-10mm.webp',
+ 'Carrot|JULIENNE|3':'carrot-julienne-3mm.webp',
+ 'Green Capsicum|DICED|20':'capsicum-cubes-20mm.webp',
+ 'Onion|SLICED|3':'onion-sliced-3mm.webp',
+ 'Cabbage|SHREDDED|3':'cabbage-shredded-3mm.webp',
+ 'Cauliflower|CHOPPED|35':'cauliflower-florets-35mm.webp',
+ 'French Beans|CHOPPED|30':'beans-french-cut-30mm.webp',
+ 'Beetroot|DICED|10':'beetroot-diced-10mm.webp'
+};
+function photoForCut(name:string,preparation:Prep,size:Size,fallback:string):string{
+ const filename=preparedCutDemoAssets[name+'|'+preparation+'|'+String(size)];
+ return filename?preparedAssetRoot+filename:fallback;
+}
+
 const specs:Spec[]=[
  {name:'Potato',baseRupees:42,image:image('potato'),cuts:[['DICED',5],['DICED',10],['DICED',20],['SLICED',5]]},
- {name:'Onion',baseRupees:52,image:image('onion'),cuts:[['CHOPPED',5],['CHOPPED',10],['CHOPPED',20],['SLICED',2]]},
+ {name:'Onion',baseRupees:52,image:image('onion'),cuts:[['CHOPPED',5],['CHOPPED',10],['CHOPPED',20],['SLICED',3]]},
  {name:'Carrot',baseRupees:58,image:image('carrot'),cuts:[['GRATED','fine'],['GRATED','coarse'],['DICED',10],['JULIENNE',3]]},
- {name:'Cabbage',baseRupees:44,image:image('cabbage'),cuts:[['SHREDDED','thin'],['SHREDDED','thick'],['CHOPPED',10],['CHOPPED',20]]},
- {name:'French Beans',baseRupees:82,image:image('general'),cuts:[['CHOPPED',5],['CHOPPED',10],['CHOPPED',20],['SLICED',5]]},
+ {name:'Cabbage',baseRupees:44,image:image('cabbage'),cuts:[['SHREDDED',3],['SHREDDED','thick'],['CHOPPED',10],['CHOPPED',20]]},
+ {name:'French Beans',baseRupees:82,image:image('general'),cuts:[['CHOPPED',5],['CHOPPED',10],['CHOPPED',30],['SLICED',5]]},
  {name:'Tomato',baseRupees:55,image:image('tomato'),cuts:[['DICED',10],['DICED',20],['SLICED',5],['CHOPPED','fine']]},
  {name:'Green Capsicum',baseRupees:85,image:image('pepper'),cuts:[['DICED',5],['DICED',10],['DICED',20],['JULIENNE',5]]},
  {name:'Beetroot',baseRupees:59,image:image('general'),cuts:[['GRATED','fine'],['GRATED','coarse'],['DICED',10],['SLICED',3]]},
  {name:'Cucumber',baseRupees:45,image:image('general'),cuts:[['DICED',10],['DICED',20],['SLICED',3],['JULIENNE',5]]},
  {name:'Radish',baseRupees:47,image:image('general'),cuts:[['GRATED','fine'],['GRATED','coarse'],['SLICED',3],['DICED',10]]},
- {name:'Cauliflower',baseRupees:80,image:image('general'),cuts:[['CHOPPED',10],['CHOPPED',20],['CHOPPED','coarse'],['SLICED',5]]},
+ {name:'Cauliflower',baseRupees:80,image:image('general'),cuts:[['CHOPPED',10],['CHOPPED',20],['CHOPPED',35],['SLICED',5]]},
  {name:'Broccoli',baseRupees:115,image:image('broccoli'),cuts:[['CHOPPED',10],['CHOPPED',20],['CHOPPED','coarse'],['SLICED',5]]},
  {name:'Bottle Gourd',baseRupees:49,image:image('general'),cuts:[['DICED',10],['DICED',20],['SLICED',5],['GRATED','coarse']]},
  {name:'Ridge Gourd',baseRupees:59,image:image('general'),cuts:[['DICED',10],['DICED',20],['SLICED',5],['CHOPPED',10]]},
@@ -42,7 +64,7 @@ export function buildDemoCatalogue():Variant[]{
    id:'sample-'+slug(name)+'-'+slug(preparation)+'-'+slug(String(size))+(numeric?'mm':''),
    vegetable:name,preparation,
    size:numeric?{kind:'numeric' as const,value:size,unit:'mm' as const}:{kind:'label' as const,value:size as 'fine'|'medium'|'coarse'|'thin'|'thick'},
-   imageUrl:image,pricePaisePerKg:(baseRupees+([0,4,7,3][i]))*100,
+   imageUrl:photoForCut(name,preparation,size,image),pricePaisePerKg:(baseRupees+([0,4,7,3][i]))*100,
    minimumGrams:500,incrementGrams:250,active:true
   };
  }));

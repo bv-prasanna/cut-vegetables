@@ -1,5 +1,6 @@
 import {describe,it,expect} from 'vitest';
-import {buildDemoCatalogue,buildDemoSlots} from './demo-catalog.js';
+import {buildDemoCatalogue,buildDemoSlots,preparedCutDemoAssets} from './demo-catalog.js';
+import {readFileSync} from 'node:fs';
 import {variantSchema,slotSchema} from './domain.js';
 describe('100-product development catalogue',()=>{
  const catalog=buildDemoCatalogue();
@@ -21,6 +22,18 @@ describe('100-product development catalogue',()=>{
  });
  it('has sane positive demo pricing, usable images and quantities',()=>{
   expect(catalog.every(p=>p.pricePaisePerKg>0&&p.minimumGrams>0&&p.imageUrl.startsWith('https://'))).toBe(true);
+ });
+ it('provides eight different real WebP files for matching illustrated cut specifications',()=>{
+  const chosen=catalog.filter(v=>v.imageUrl.includes('/images/prepared-cut/'));
+  expect(chosen).toHaveLength(8);
+  expect(new Set(chosen.map(v=>v.vegetable)).size).toBe(8);
+  expect(Object.keys(preparedCutDemoAssets)).toHaveLength(8);
+  for(const filename of Object.values(preparedCutDemoAssets)){
+   const bytes=readFileSync(new URL('../../web/public/images/prepared-cut/'+filename,import.meta.url));
+   expect(bytes.length).toBeGreaterThan(5000);
+   expect(bytes.toString('ascii',0,4)).toBe('RIFF');
+   expect(bytes.toString('ascii',8,12)).toBe('WEBP');
+  }
  });
  it('uses the two requested delivery cutoff examples',()=>{
   const slots=buildDemoSlots();

@@ -21,8 +21,9 @@ describe('approved FreshPrep storefront',()=>{
  });
  it('makes illustrative product cards explicit when catalogue is empty',()=>{
   const html=markup([]);
-  expect(html).toContain('Illustrative photo');
+  expect(html).toContain('AI-generated demo image');
   expect(html).toContain('Price on request');
-  expect((html.match(/class="fp-sample-mark"/g)||[])).toHaveLength(4);
+  for(const cut of ['potato-diced-10mm.webp','carrot-julienne-3mm.webp','capsicum-cubes-20mm.webp','onion-sliced-3mm.webp','cabbage-shredded-3mm.webp','cauliflower-florets-35mm.webp','beans-french-cut-30mm.webp','beetroot-diced-10mm.webp'])expect(html).toContain(cut);
+  expect((html.match(/class="fp-sample-mark"/g)||[])).toHaveLength(8);
  });
 });
