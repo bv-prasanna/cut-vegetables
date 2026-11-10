@@ -342,6 +342,8 @@ function AuthenticatedMobile(){
 }
 export default function SecureApp(){return <SafeAreaProvider><AuthenticatedMobile/></SafeAreaProvider>;}
 const styles=StyleSheet.create({
+ productDemoBadge:{position:'absolute',top:10,right:10,backgroundColor:'#153e30ec',borderRadius:6,paddingHorizontal:8,paddingVertical:5},
+ productDemoText:{color:'#efffee',fontSize:9,fontWeight:'900'},
  catalogBanner:{backgroundColor:'#154d34',padding:23,borderRadius:18,marginBottom:12},
  catalogKicker:{color:'#cce8ad',fontSize:10,letterSpacing:1.7,fontWeight:'900'},
  catalogHeading:{color:'#fff',fontWeight:'900',fontSize:23,marginTop:9,marginBottom:7},
