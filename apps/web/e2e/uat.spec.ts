@@ -222,3 +222,21 @@ test('daily schedule never pretends that only three weekdays are selected',async
  await expect(page.getByLabel('Selected weekdays')).toBeVisible();
  await expect(page.getByRole('button',{name:'Mon',exact:true})).toHaveAttribute('aria-pressed','true');
 });
+
+test('eight genuine checked-in WebP demo asset files load and render on desktop and mobile',async({page},info)=>{
+ await mockApi(page,[]);
+ await page.goto('/');
+ const cards=page.locator('.fp-product-grid .fp-product-card');
+ await expect(cards).toHaveCount(8);
+ const imgs=page.locator('.fp-product-grid .fp-product-photo img');
+ await expect(imgs).toHaveCount(8);
+ await expect.poll(async()=>imgs.evaluateAll(nodes=>
+  nodes.filter(n=>n instanceof HTMLImageElement&&n.complete&&n.naturalWidth>0&&n.naturalHeight>0).length
+ )).toBe(8);
+ expect(await imgs.evaluateAll(nodes=>new Set(nodes.map(n=>n.getAttribute('src'))).size)).toBe(8);
+ await expect(page.locator('.fp-product-grid .fp-sample-mark')).toHaveCount(8);
+ await page.screenshot({path:info.outputPath('eight-prepared-cut-photos-desktop.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ await assertNoHorizontalOverflow(page);
+ await page.screenshot({path:info.outputPath('eight-prepared-cut-photos-mobile.png'),fullPage:true});
+});
