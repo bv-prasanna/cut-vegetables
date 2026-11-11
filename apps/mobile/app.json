@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "FreshPrep Veggies",
+    "slug": "freshprep-veggies",
+    "scheme": "freshprep",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.freshprep.veggies",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Location is used, with permission, to document order and delivery actions."
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "FreshPrep uses your location, with permission, to record order and delivery events."
+        }
+      ]
+    ],
+    "extra": {
+      "buildProfile": "development"
+    }
+  }
+}

@@ -1,0 +1,136 @@
+name: FreshPrep UAT Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+      - feat/typescript-platform-foundation
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: freshprep-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-and-web:
+    name: API and Web - typecheck, negative tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Backend TypeScript
+        run: npm run typecheck
+      - name: Backend unit and negative tests
+        run: npm test
+      - name: Web unit and negative tests
+        run: npm run web:test
+      - name: Production web build
+        run: npm run web:build
+      - name: Prevent secrets in Vite output
+        shell: bash
+        run: |
+          if grep -R -E -i '(BOOTSTRAP_PASSWORD|JWT_SECRET|DATABASE_URL)\s*=' apps/web/dist; then
+            echo 'Potential internal configuration found in web bundle' >&2
+            exit 1
+          fi
+  expo-mobile:
+    name: Expo Mobile - typecheck and negative tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Expo mobile dependencies
+        run: npm install --no-audit --no-fund
+      - name: Expo TypeScript
+        run: npm run typecheck
+      - name: Mobile unit and negative tests
+        run: npm test
+  postgres-integration:
+    name: PostgreSQL 16 - migrations, bootstrap and real order UAT
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: freshprep_ci
+          POSTGRES_PASSWORD: local_disposable_ci_password
+          POSTGRES_DB: freshprep_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U freshprep_ci -d freshprep_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://freshprep_ci:local_disposable_ci_password@127.0.0.1:5432/freshprep_ci
+      BOOTSTRAP_ORG: FreshPrep CI Producer
+      BOOTSTRAP_EMAIL: freshprep-ci-admin@example.invalid
+      BOOTSTRAP_PASSWORD: CI-only-password-never-use-in-prod-123!
+      FRESHPREP_DEMO_DB_SEED: YES_I_WANT_SAMPLE_DATA
+      FRESHPREP_PG_INTEGRATION: 'true'
+      JWT_SECRET: freshprep-ci-isolated-jwt-key-at-least-32-chars-long-123456
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Apply all migrations
+        run: npm run db:migrate --workspace @freshprep/api
+      - name: One-time Super Admin bootstrap
+        run: npm run db:bootstrap --workspace @freshprep/api
+      - name: Seed 100 illustrative products
+        run: npm run db:seed-demo --workspace @freshprep/api
+      - name: Real database lifecycle and negative tests
+        run: npm run test:pg --workspace @freshprep/api
+
+  browser-uat:
+    name: Chromium - real page flows, mobile navigation and screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium and browser dependencies
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - name: Build secure production web app
+        run: npm run web:build
+        env:
+          VITE_ENABLE_DEMO: 'false'
+      - name: Run responsive browser and negative UX tests
+        run: npm run test:e2e --workspace @freshprep/web
+        env:
+          CI: 'true'
+      - name: Upload rendered page screenshots and test traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: freshprep-browser-uat-${{ github.run_number }}
+          path: |
+            apps/web/test-results/
+            apps/web/playwright-report/
+          retention-days: 14
