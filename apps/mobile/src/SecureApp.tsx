@@ -7,28 +7,29 @@ import {validateOperationInput} from './operation-validation';
 import {searchCuts,basketTotals} from './catalog-view';
 import {checkoutError,fingerprintOrder} from './checkout-validation';
 import {nextQuantity} from './secure-api';
+import {actionChoicesForField,isActionChoiceField,emptyActionOptions,type ActionOptions,type ActionMutation} from './action-choices';
 import {todayInIndia} from './work-queue';
 import {backend,firstAllowedScreen,screenPermissions,sizeDescription,validateApiBase,
  type Session,type Identity,type CatalogueVariant,type Kitchen,type DeliverySlot,type Order,type StaffBoardRow} from './secure-api';
 
 type Fields=Record<string,string>;
 type Recurrence={id:string;state:string;frequency:string;start_date:string;weekdays:number[];slot_id:string};
-type Mutation='SUPPLIER'|'PURCHASE'|'RECEIVE'|'BATCH'|'COMPLETE'|'QC'|'PACK'|'RUN'|'STOP'|'POD';
+type Mutation=ActionMutation;
 type Operation={
  title:string;path:string;method:'POST';eventType:string;subjectType:string;
  fields:{key:string;title:string;type?:'number'|'text'}[];
 };
 const operations:Record<Mutation,Operation>={
  SUPPLIER:{title:'Create supplier',path:'/v1/ops/suppliers',method:'POST',eventType:'SUPPLIER_CREATED',subjectType:'SUPPLIER',fields:[{key:'name',title:'Supplier business name'}]},
- PURCHASE:{title:'Create purchase order',path:'/v1/ops/purchases',method:'POST',eventType:'PURCHASE_ORDER_CREATED',subjectType:'PURCHASE',fields:[{key:'supplierId',title:'Supplier UUID'}]},
- RECEIVE:{title:'Receive raw lot',path:'/v1/ops/purchases/{id}/receive',method:'POST',eventType:'RAW_LOT_RECEIVED',subjectType:'RAW_LOT',fields:[{key:'id',title:'Purchase UUID'},{key:'vegetableId',title:'Vegetable UUID'},{key:'receivedGrams',title:'Received grams',type:'number'},{key:'usableGrams',title:'Usable grams',type:'number'},{key:'rejectedGrams',title:'Rejected grams',type:'number'},{key:'supplierLot',title:'Supplier lot reference'}]},
- BATCH:{title:'Start production batch',path:'/v1/ops/batches',method:'POST',eventType:'PRODUCTION_BATCH_STARTED',subjectType:'BATCH',fields:[{key:'orderId',title:'Order UUID'},{key:'variantId',title:'Cut variant UUID'},{key:'rawLotId',title:'Raw lot UUID'},{key:'inputGrams',title:'Input grams',type:'number'}]},
- COMPLETE:{title:'Record batch output',path:'/v1/ops/batches/{id}/complete',method:'POST',eventType:'PRODUCTION_BATCH_COMPLETED',subjectType:'BATCH',fields:[{key:'id',title:'Production batch UUID'},{key:'outputGrams',title:'Finished grams',type:'number'},{key:'wasteGrams',title:'Waste grams',type:'number'}]},
+ PURCHASE:{title:'Create purchase order',path:'/v1/ops/purchases',method:'POST',eventType:'PURCHASE_ORDER_CREATED',subjectType:'PURCHASE',fields:[{key:'supplierId',title:'Select supplier'}]},
+ RECEIVE:{title:'Receive raw lot',path:'/v1/ops/purchases/{id}/receive',method:'POST',eventType:'RAW_LOT_RECEIVED',subjectType:'RAW_LOT',fields:[{key:'id',title:'Select purchase order'},{key:'vegetableId',title:'Select vegetable'},{key:'receivedGrams',title:'Received grams',type:'number'},{key:'usableGrams',title:'Usable grams',type:'number'},{key:'rejectedGrams',title:'Rejected grams',type:'number'},{key:'supplierLot',title:'Supplier lot reference'}]},
+ BATCH:{title:'Start production batch',path:'/v1/ops/batches',method:'POST',eventType:'PRODUCTION_BATCH_STARTED',subjectType:'BATCH',fields:[{key:'orderId',title:'Select confirmed order'},{key:'variantId',title:'Select ordered cut and size'},{key:'rawLotId',title:'Select matching raw lot'},{key:'inputGrams',title:'Input grams',type:'number'}]},
+ COMPLETE:{title:'Record batch output',path:'/v1/ops/batches/{id}/complete',method:'POST',eventType:'PRODUCTION_BATCH_COMPLETED',subjectType:'BATCH',fields:[{key:'id',title:'Select processing batch'},{key:'outputGrams',title:'Finished grams',type:'number'},{key:'wasteGrams',title:'Waste grams',type:'number'}]},
  QC:{title:'QC inspection',path:'/v1/ops/batches/{id}/qc',method:'POST',eventType:'QC_CHECK_RECORDED',subjectType:'QC_CHECK',fields:[{key:'id',title:'Batch UUID'},{key:'passed',title:'Passed? Enter true / false'},{key:'findings',title:'Inspection findings'},{key:'temperatureC',title:'Measured temperature °C',type:'number'}]},
- PACK:{title:'Record labelled pack',path:'/v1/ops/batches/{id}/pack',method:'POST',eventType:'PACK_UNIT_CREATED',subjectType:'PACK_UNIT',fields:[{key:'id',title:'QC-approved batch UUID'},{key:'netGrams',title:'Net pack grams',type:'number'},{key:'labelCode',title:'Unique printed label code'},{key:'useBy',title:'Use by (ISO with timezone)'}]},
- RUN:{title:'Create driver run',path:'/v1/ops/runs',method:'POST',eventType:'DELIVERY_RUN_CREATED',subjectType:'DELIVERY_RUN',fields:[{key:'slotId',title:'Delivery slot UUID'},{key:'deliveryDate',title:'Delivery date YYYY-MM-DD'},{key:'driverId',title:'Assigned driver UUID'}]},
- STOP:{title:'Assign order to driver run',path:'/v1/ops/runs/{id}/stops',method:'POST',eventType:'DELIVERY_STOP_ASSIGNED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Delivery run UUID'},{key:'orderId',title:'Packed order UUID'},{key:'stopNumber',title:'Stop number',type:'number'}]},
- POD:{title:'Confirm delivery handover',path:'/v1/ops/stops/{id}/complete',method:'POST',eventType:'DELIVERY_POD_CAPTURED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Assigned stop UUID'},{key:'receivedBy',title:'Receiver full name'},{key:'notes',title:'Handover notes'}]}
+ PACK:{title:'Record labelled pack',path:'/v1/ops/batches/{id}/pack',method:'POST',eventType:'PACK_UNIT_CREATED',subjectType:'PACK_UNIT',fields:[{key:'id',title:'Select QC-approved batch'},{key:'netGrams',title:'Net pack grams',type:'number'},{key:'labelCode',title:'Unique printed label code'},{key:'useBy',title:'Use by (ISO with timezone)'}]},
+ RUN:{title:'Create driver run',path:'/v1/ops/runs',method:'POST',eventType:'DELIVERY_RUN_CREATED',subjectType:'DELIVERY_RUN',fields:[{key:'slotId',title:'Select delivery slot'},{key:'deliveryDate',title:'Delivery date YYYY-MM-DD'},{key:'driverId',title:'Select driver'}]},
+ STOP:{title:'Assign order to driver run',path:'/v1/ops/runs/{id}/stops',method:'POST',eventType:'DELIVERY_STOP_ASSIGNED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select delivery run'},{key:'orderId',title:'Select packed order'},{key:'stopNumber',title:'Stop number',type:'number'}]},
+ POD:{title:'Confirm delivery handover',path:'/v1/ops/stops/{id}/complete',method:'POST',eventType:'DELIVERY_POD_CAPTURED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select assigned delivery stop'},{key:'receivedBy',title:'Receiver full name'},{key:'notes',title:'Handover notes'}]}
 };
 const palette={green:'#175a3a',light:'#edf5ed',muted:'#748676'};
 const kg=(n:unknown)=>((Number(n)||0)/1000).toLocaleString('en-IN',{maximumFractionDigits:2})+' kg';
@@ -80,6 +81,7 @@ function AuthenticatedMobile(){
  const [session,setSession]=useState<Session|null>(null),[identity,setIdentity]=useState<Identity|null>(null);
  const [screen,setScreen]=useState('Home'),[loading,setLoading]=useState(false),[error,setError]=useState('');
  const [data,setData]=useState<unknown[]>([]),[date,setDate]=useState(todayInIndia());
+ const [actionOptions,setActionOptions]=useState<ActionOptions>(emptyActionOptions);
  const [catalogue,setCatalogue]=useState<CatalogueVariant[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]),[slots,setSlots]=useState<DeliverySlot[]>([]);
  const [cart,setCart]=useState<Record<string,number>>({}),[kitchenId,setKitchenId]=useState(''),[slotId,setSlotId]=useState('');
   const orderIntent=useRef<{fingerprint:string;key:string}|null>(null);
@@ -113,7 +115,7 @@ function AuthenticatedMobile(){
   finally{setLoading(false);}
  }
  async function logout(){
-  const token=session?.accessToken;orderIntent.current=null;setSession(null);setIdentity(null);setData([]);setCart({});setPassword('');
+  const token=session?.accessToken;orderIntent.current=null;setSession(null);setIdentity(null);setData([]);setActionOptions(emptyActionOptions);setCart({});setPassword('');
   if(token)await backend(base,'/v1/logout',token,'POST').catch(()=>{});
  }
  const refresh=useCallback(async()=>{
@@ -134,6 +136,10 @@ function AuthenticatedMobile(){
     if(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')setCatalogue(result as CatalogueVariant[]);
     else setData(Array.isArray(result)?result:[result]);
    }
+   if(['Procurement','Cutting','Quality','Packing','Delivery'].includes(screen)){
+    const choices=await call<ActionOptions>('/v1/ops/action-options');
+    setActionOptions({...emptyActionOptions,...choices});
+   }else setActionOptions(emptyActionOptions);
    if(screen==='Place Order'||screen==='Recurring'){
     const [k,s]=await Promise.all([call<Kitchen[]>('/v1/kitchens'),call<DeliverySlot[]>('/v1/delivery-slots')]);
     setKitchens(k);setSlots(s);
@@ -315,25 +321,32 @@ function AuthenticatedMobile(){
   {ops.length>0&&<View style={styles.card}><Text style={styles.heading}>Record verified operation</Text>
    <Text style={styles.muted}>These actions update PostgreSQL, require your actual server role and capture a consent-based location audit.</Text>
    <ScrollView horizontal contentContainerStyle={styles.row}>{ops.map(name=><Btn key={name} text={operations[name].title} secondary={action!==name} onPress={()=>{setOperation(name);setFields({})}}/>)}</ScrollView>
-   {operations[action].fields.map(f=>f.key==='passed'?
-    <View key="qc-result" style={styles.field}>
+   {operations[action].fields.map(f=>{
+    if(f.key==='passed')return <View key="qc-result" style={styles.field}>
      <Text style={styles.label}>Inspection decision · required</Text>
      <View style={styles.row}>
       <Btn text="✓ Pass QC" secondary={fields.passed!=='true'} onPress={()=>setFields(old=>({...old,passed:'true'}))}/>
       <Btn text="✕ Reject batch" secondary={fields.passed!=='false'} onPress={()=>setFields(old=>({...old,passed:'false'}))}/>
      </View>
-    </View>:
-    <View key={f.key}>
-     <Input title={f.title} numeric={f.type==='number'} value={fields[f.key]||''}
-      onChange={value=>setFields(old=>({...old,[f.key]:value}))}/>
-     {f.key==='id'&&['QC','PACK','COMPLETE','POD'].includes(action)&&data.map(row=>row&&typeof row==='object'&&!Array.isArray(row)?row as Record<string,unknown>:{}).filter(row=>typeof (action==='POD'?row.stop_id:row.id)==='string').slice(0,5).map((row,index)=>{
-      const id=String(action==='POD'?row.stop_id:row.id);
-      return <Pressable key={id+index} accessibilityRole="button" style={styles.idSuggestion}
-       onPress={()=>setFields(old=>({...old,id}))}>
-       <Text style={styles.idSuggestionText}>Use {action==='POD'?'assigned stop':'batch'} · {id.slice(0,8)}</Text>
-      </Pressable>;
-     })}
-    </View>)}
+    </View>;
+    if(isActionChoiceField(action,f.key)){
+     const choices=actionChoicesForField(action,f.key,actionOptions,fields);
+     return <View key={f.key} style={styles.field}>
+      <Text style={styles.label}>{f.title}</Text>
+      {choices.length?<View style={styles.choiceWrap}>{choices.map(choice=><Btn key={choice.value} text={choice.label} secondary={fields[f.key]!==choice.value} onPress={()=>{
+       setFields(old=>{
+        const next={...old,[f.key]:choice.value};
+        if(action==='BATCH'&&f.key==='orderId'){next.variantId='';next.rawLotId='';}
+        if(action==='BATCH'&&f.key==='variantId')next.rawLotId='';
+        if(action==='STOP'&&f.key==='id')next.orderId='';
+        return next;
+       });
+      }}/>)}</View>:<Text style={styles.muted}>No eligible records yet. Complete the previous workflow step or refresh this screen.</Text>}
+     </View>;
+    }
+    return <View key={f.key}><Input title={f.title} numeric={f.type==='number'} value={fields[f.key]||''}
+      onChange={value=>setFields(old=>({...old,[f.key]:value}))}/></View>;
+   })}
    {Boolean(error)&&<Text style={styles.error} accessibilityRole="alert">{error}</Text>}
    <Btn text={loading?'Recording…':'Confirm '+operations[action].title} disabled={loading} onPress={()=>void submitAction()}/>
   </View>}
@@ -342,6 +355,7 @@ function AuthenticatedMobile(){
 }
 export default function SecureApp(){return <SafeAreaProvider><AuthenticatedMobile/></SafeAreaProvider>;}
 const styles=StyleSheet.create({
+ choiceWrap:{flexDirection:'row',flexWrap:'wrap',gap:4,alignItems:'flex-start'},
  productDemoBadge:{position:'absolute',top:10,right:10,backgroundColor:'#153e30ec',borderRadius:6,paddingHorizontal:8,paddingVertical:5},
  productDemoText:{color:'#efffee',fontSize:9,fontWeight:'900'},
  catalogBanner:{backgroundColor:'#154d34',padding:23,borderRadius:18,marginBottom:12},
