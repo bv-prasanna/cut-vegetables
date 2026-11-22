@@ -133,6 +133,31 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
   const q=await pool.query('SELECT id,kitchen_id,delivery_date,slot_id,state,created_at FROM orders WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 100',[c.get('organizationId')]);
   return c.json(q.rows);
  });
+ app.get('/v1/orders/:id',async c=>{
+  if(!canAny(c.get('roles'),'orders:read'))return c.json(reject('Forbidden'),403);
+  const id=c.req.param('id');
+  if(!z.string().uuid().safeParse(id).success)return c.json(reject('Invalid order ID'),400);
+  const order=await pool.query(`SELECT o.id,o.kitchen_id,k.name AS kitchen_name,o.slot_id,s.label AS slot_label,
+   o.delivery_date::text AS delivery_date,o.state,o.created_at,o.subtotal_paise,o.delivery_fee_paise,
+   o.discount_paise,o.total_paise,o.pricing_snapshot
+   FROM orders o JOIN kitchens k ON k.id=o.kitchen_id JOIN delivery_slots s ON s.id=o.slot_id
+   WHERE o.id=$1 AND o.organization_id=$2`,[id,c.get('organizationId')]);
+  if(!order.rowCount)return c.json(reject('Order not found'),404);
+  const [items,packs,delivery]=await Promise.all([
+   pool.query(`SELECT oi.variant_id,oi.grams,oi.price_paise_per_kg,oi.line_total_paise,
+    pv.sku,v.name AS vegetable,pv.method_code AS preparation,pv.size_kind,pv.size_number,pv.size_unit,pv.size_label
+    FROM order_items oi JOIN product_variants pv ON pv.id=oi.variant_id
+    JOIN vegetables v ON v.id=pv.vegetable_id WHERE oi.order_id=$1 ORDER BY v.name,pv.sku`,[id]),
+   pool.query(`SELECT pu.id,pu.label_code,pu.net_grams,pu.packed_at,pu.use_by,pb.id AS batch_id,
+    pb.state AS batch_state FROM pack_units pu JOIN production_batches pb ON pb.id=pu.batch_id
+    WHERE pu.order_id=$1 ORDER BY pu.packed_at,pu.id`,[id]),
+   pool.query(`SELECT ds.id AS stop_id,ds.status AS delivery_status,ds.stop_number,ds.arrived_at,ds.completed_at,
+    dr.id AS run_id,dr.status AS run_status,dp.received_by,dp.received_at AS proof_received_at,dp.note AS proof_note
+    FROM delivery_stops ds JOIN delivery_runs dr ON dr.id=ds.run_id
+    LEFT JOIN delivery_proofs dp ON dp.stop_id=ds.id WHERE ds.order_id=$1`,[id])
+  ]);
+  return c.json({...order.rows[0],items:items.rows,packUnits:packs.rows,delivery:delivery.rows[0]??null});
+ });
  app.post('/v1/orders',async c=>{
   if(!canAny(c.get('roles'),'orders:write'))return c.json(reject('Forbidden'),403);
   const parsed=orderSchema.safeParse(await c.req.json().catch(()=>null));
