@@ -1,3 +1,5 @@
+> **Historical snapshot:** this document predates the current main implementation. For authoritative status and the 98% completion gates, see [98_PERCENT_COMPLETION_PLAN.md](98_PERCENT_COMPLETION_PLAN.md) and [RELEASE_READINESS.md](RELEASE_READINESS.md).
+
 # PostgreSQL-backed API vertical slice (not yet production ready)
 
 Run migrations 0001–0006 in order against a disposable local Postgres database. Configure DATABASE_URL and start with `npm run dev:pg --workspace @freshprep/api`. The old /dev UI still runs on a separate in-memory API on port 3000 and is NOT connected to this API.

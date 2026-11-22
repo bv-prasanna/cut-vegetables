@@ -1,3 +1,5 @@
+> **Historical snapshot:** this document predates the current main implementation. For authoritative status and the 98% completion gates, see [98_PERCENT_COMPLETION_PLAN.md](98_PERCENT_COMPLETION_PLAN.md) and [RELEASE_READINESS.md](RELEASE_READINESS.md).
+
 # FreshPrep production quality baseline
 
 ## User roles / separation of duties
