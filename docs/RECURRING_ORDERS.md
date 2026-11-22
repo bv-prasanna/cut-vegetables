@@ -49,3 +49,17 @@ npm run recurrence:run --workspace @freshprep/api
 - Parallel generator executions: database row locks and unique occurrence constraints must eliminate duplicates.
 
 **Status:** Code and focused mock-based tests added. Live PostgreSQL migration, concurrency/integration tests, external scheduler and end-to-end customer UAT have **not yet been verified**.
+
+## Best-effort GitHub scheduler
+
+The repository now includes .github/workflows/recurring-orders.yml. It is configured to run:
+- **10:35 IST** for the same-day afternoon slot (11:00 cutoff).
+- **22:35 IST** for the next-day morning slot (23:00 prior-day cutoff).
+
+Before enabling it, add these repository Actions secrets:
+- FRESHPREP_DATABASE_URL — TLS PostgreSQL connection string for the producer database.
+- FRESHPREP_PRODUCER_ORG_ID — producer organisation UUID.
+
+The workflow can also be run manually with an optional delivery_date. It fails if secrets are missing or if the generator reports blocked occurrences. Keep GitHub Actions failure notifications enabled and inspect the run summary after each scheduled execution.
+
+**Reliability caveat:** GitHub scheduled workflows are best-effort and can start late. This is a low-cost pilot scheduler, not a guaranteed cutoff SLA. It must be observed during a controlled pilot; if late execution is unacceptable, move the same idempotent CLI to an always-on scheduler with an operational SLA. The workflow does not configure secrets or deploy infrastructure on your behalf.
