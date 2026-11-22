@@ -309,6 +309,18 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(replay.status).toBe(409);
   const state=await pool.query<{state:string}>('SELECT state FROM orders WHERE id=$1',[orderId]);
   expect(state.rows[0].state).toBe('DELIVERED');
+  const customerOrderDetail=await request('/v1/orders/'+orderId,'GET',undefined,customerToken);
+  expect(customerOrderDetail.status).toBe(200);
+  const detail=await customerOrderDetail.json() as {
+   state:string;items:{variant_id:string;grams:number}[];
+   packUnits:{label_code:string;net_grams:number}[];
+   delivery:{delivery_status:string;received_by:string;proof_received_at:string}|null
+  };
+  expect(detail.state).toBe('DELIVERED');
+  expect(detail.items).toContainEqual(expect.objectContaining({variant_id:variantId,grams}));
+  expect(detail.packUnits).toContainEqual(expect.objectContaining({label_code:'CI-PACK-A-001',net_grams:grams}));
+  expect(detail.delivery).toMatchObject({delivery_status:'DELIVERED',received_by:'UAT Customer'});
+  expect((await request('/v1/orders/not-a-uuid','GET',undefined,customerToken)).status).toBe(400);
   const audit=await pool.query<{count:string}>(
    "SELECT count(*)::text AS count FROM event_log WHERE organization_id=$1 AND event_type='DELIVERY_POD_CAPTURED'",[producerOrg]);
   expect(Number(audit.rows[0].count)).toBe(1);
