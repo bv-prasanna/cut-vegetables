@@ -144,6 +144,13 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   const replay=await request('/v1/orders','POST',body,customerToken);
   expect(replay.status).toBe(200);
   expect(await replay.json()).toMatchObject({id:created.id,replayed:true});
+  const conflictingReplay=await request('/v1/orders','POST',{
+   ...body,items:[{variantId,grams:grams+incrementGrams}]
+  },customerToken);
+  expect(conflictingReplay.status).toBe(409);
+  expect(await conflictingReplay.json()).toMatchObject({
+   error:'This idempotency key was already used for a different or unverifiable order request. Start a new order.'
+  });
   const db=await pool.query<{n:string}>('SELECT count(*)::text AS n FROM slot_reservations WHERE order_id=$1',[created.id]);
   expect(Number(db.rows[0].n)).toBe(1);
   const snapshot=await pool.query<{contract_id:string;subtotal_paise:string;delivery_fee_paise:string;total_paise:string;price_paise_per_kg:string}>(
