@@ -173,7 +173,6 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    location:{source:'UNAVAILABLE',unavailableReason:'CI has no device GPS',consentStatus:'NOT_REQUESTED'},
    details:{client:'freshprep-ci-cancellation'}};
   expect((await request('/v1/orders/'+id+'/cancel','POST',{event:cancellationEvent},customerToken)).status).toBe(200);
-  expect(await request('/v1/orders/'+id+'/cancel','POST',{},customerToken)).resolves;
   const replay=await request('/v1/orders/'+id+'/cancel','POST',{},customerToken);
   expect(replay.status).toBe(200);
   expect(await replay.json()).toMatchObject({id,state:'CANCELLED',replayed:true});
