@@ -147,7 +147,19 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
    }catch(e){setError(e instanceof Error?e.message:'Unable to accept quote');}
    finally{setBusy(false);}
   }
-  async function rejectQuote(q:Quote){
+  async function cancelOrder(order:Order){
+  if(!canWrite||order.state!=='CONFIRMED')return;
+  if(typeof window!=='undefined'&&!window.confirm('Cancel this order? The delivery slot will be released.'))return;
+  setBusy(true);setError('');setStatus('');
+  try{
+   const event=await capture('ORDER_CANCELLED','ORDER');
+   await call('/v1/orders/'+encodeURIComponent(order.id)+'/cancel','POST',{event});
+   setStatus('Order '+order.id.slice(0,12)+' cancelled. Its delivery slot has been released.');
+   await refresh();
+  }catch(e){setError(e instanceof Error?e.message:'Unable to cancel order');}
+  finally{setBusy(false);}
+ }
+ async function rejectQuote(q:Quote){
    setBusy(true);setError('');setStatus('');
    try{await call('/v1/quotes/'+q.id+'/reject','POST',{});setStatus('Quote #'+q.quote_number+' declined.');await refresh();}
    catch(e){setError(e instanceof Error?e.message:'Unable to decline quote');}
@@ -173,7 +185,7 @@ async function setScheduleState(s:Schedule,state:'ACTIVE'|'PAUSED'|'CANCELLED'){
  {status&&<div role="status" className="fp-customer-ok">{status}</div>}
  <nav className="fp-customer-tabs"><button className={view==='Order'?'active':''} onClick={()=>setView('Order')}>One-time order</button><button className={view==='Recurring'?'active':''} onClick={()=>setView('Recurring')}>Recurring supply</button><button className={view==='History'?'active':''} onClick={()=>setView('History')}>Orders & schedules</button></nav>
  {!canWrite&&<p className="fp-customer-info">Your role permits viewing orders but not creating or changing them.</p>}
- {view==='History'?<div className="fp-customer-history"><section><h3>Recent orders</h3>{orders.length?orders.map(o=><article key={o.id}><b>{o.id.slice(0,12)}</b><span>{o.delivery_date}</span><span>{o.state}</span></article>):<p>No orders yet.</p>}</section>
+ {view==='History'?<div className="fp-customer-history"><section><h3>Recent orders</h3>{orders.length?orders.map(o=><article key={o.id}><b>{o.id.slice(0,12)}</b><span>{o.delivery_date}</span><span>{o.state}</span>{canWrite&&o.state==='CONFIRMED'&&<button type="button" disabled={busy} onClick={()=>void cancelOrder(o)}>Cancel order</button>}</article>):<p>No orders yet.</p>}</section>
  <section><h3>Recurring schedules</h3>{schedules.length?schedules.map(s=><article key={s.id}><div><b>{s.frequency} · {s.state}</b><p>{s.start_date}{s.end_date?' – '+s.end_date:''}</p><small>{s.id}</small></div>{canWrite&&<div className="fp-customer-actions"><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,s.state==='ACTIVE'?'PAUSED':'ACTIVE')}>{s.state==='ACTIVE'?'Pause':'Resume'}</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void skipDate(s)}>Skip selected date</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,'CANCELLED')}>Cancel</button></div>}</article>):<p>No recurring schedules.</p>}</section><section className="fp-customer-quotes"><h3>Quote requests</h3>{quotes.length?quotes.map(q=><article key={q.id}><div><b>Quote #{q.quote_number} · {q.state}</b><p>Delivery {q.delivery_date} · Total {money(Number(q.total_paise))}</p>{q.note&&<small>{q.note}</small>}{q.valid_until&&<small>Valid until {new Date(q.valid_until).toLocaleString('en-IN')}</small>}{q.accepted_order_id&&<small>Order {q.accepted_order_id.slice(0,12)}</small>}</div>{q.state==='PROPOSED'&&canWrite&&<div className="fp-customer-actions"><button disabled={busy} onClick={()=>void acceptQuote(q)}>Accept quote</button><button disabled={busy} onClick={()=>void rejectQuote(q)}>Decline</button></div>}</article>):<p>No quote requests yet.</p>}</section></div>:
  <div className="fp-customer-order"><section className="fp-customer-products"><div className="fp-customer-filter"><div><h3>Prepared vegetables</h3><p>{visible.length} fresh-cut options · prices shown per kilogram</p></div><input type="search" aria-label="Search the catalogue" placeholder="Search vegetable, cut or size…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
  <div className="fp-customer-grid">{visible.map(p=><article key={p.id}><ProductPhoto item={p}/><div className="fp-product-info"><strong>{p.vegetable}</strong><small>{p.preparation.toLowerCase()} · {p.size_kind==='numeric'?p.size_number+' '+p.size_unit:p.size_label}</small><b>{money(p.price_paise_per_kg)}<em>/kg</em></b></div>{canWrite&&<div className="fp-customer-qty"><button onClick={()=>change(p,-1)} aria-label={'Reduce '+p.vegetable}>−</button><span>{((basket[p.id]||0)/1000).toFixed(2)} kg</span><button onClick={()=>change(p,1)} aria-label={'Increase '+p.vegetable}>+</button></div>}</article>)}{visible.length===0&&<div className="fp-emptystate"><strong>{products.length===0?'Your catalogue is being prepared':'No matching preparations'}</strong><p>{products.length===0?'The kitchen catalogue is empty. Ask your account manager to publish products.':'Try a different vegetable, cut or size.'}</p></div>}</div>
