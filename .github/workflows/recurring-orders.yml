@@ -36,15 +36,18 @@ jobs:
       - name: Validate scheduler configuration and derive delivery date
         id: target
         shell: bash
+        env:
+          DELIVERY_DATE_OVERRIDE: ${{ inputs.delivery_date }}
+          SCHEDULE_CRON: ${{ github.event.schedule }}
         run: |
           set -euo pipefail
           if [ -z "${DATABASE_URL}" ] || [ -z "${PRODUCER_ORG_ID}" ]; then
             echo "::error::Configure FRESHPREP_DATABASE_URL and FRESHPREP_PRODUCER_ORG_ID repository secrets before enabling recurring generation."
             exit 1
           fi
-          if [ -n "${{ inputs.delivery_date }}" ]; then
-            delivery_date="${{ inputs.delivery_date }}"
-          elif [ "${{ github.event.schedule }}" = "5 17 * * *" ]; then
+          if [ -n "$DELIVERY_DATE_OVERRIDE" ]; then
+            delivery_date="$DELIVERY_DATE_OVERRIDE"
+          elif [ "$SCHEDULE_CRON" = "5 17 * * *" ]; then
             delivery_date="$(TZ=Asia/Kolkata date -d 'tomorrow' +%F)"
           else
             delivery_date="$(TZ=Asia/Kolkata date +%F)"
