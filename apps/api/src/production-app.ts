@@ -15,6 +15,8 @@ import {createStaffBoardRoutes} from './staff-query-routes.js';
 import {createRecurrenceRoutes} from './recurrence-routes.js';
 import {createCatalogAdminRoutes} from './catalog-admin.js';
 import {createMarketingRoutes} from './marketing-routes.js';
+import {createCommercialRoutes} from './commercial-routes.js';
+import {loadContractPricing} from './commercial-pricing.js';
 type Context={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const loginSchema=z.object({email:z.string().email().max(254),password:z.string().min(1).max(1024),organizationId:z.string().uuid()});
 const orderSchema=z.object({
@@ -97,11 +99,32 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
   userId:c.get('userId'),organizationId:c.get('organizationId'),roles:c.get('roles')
  }));
  app.get('/v1/catalog',async c=>{
-  if(!canAny(c.get('roles'),'catalog:read')&&!canAny(c.get('roles'),'catalog:write'))return c.json(reject('Forbidden'),403);
+  const roles=c.get('roles');
+  if(!canAny(roles,'catalog:read')&&!canAny(roles,'catalog:write'))return c.json(reject('Forbidden'),403);
+  const customer=roles.some(r=>['CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER'].includes(r));
+  if(customer){
+   const kitchenId=c.req.query('kitchenId'),deliveryDate=c.req.query('deliveryDate')||new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata'}).format(clock());
+   if(!kitchenId||!z.string().uuid().safeParse(kitchenId).success)return c.json(reject('Select a valid kitchen to load its contracted catalogue'),400);
+   try{localDate(deliveryDate);}catch{return c.json(reject('Invalid delivery date'),400);}
+   const kitchen=await pool.query<{producer_organization_id:string|null}>('SELECT producer_organization_id FROM kitchens WHERE id=$1 AND organization_id=$2 AND active=true',[kitchenId,c.get('organizationId')]);
+   if(!kitchen.rowCount||!kitchen.rows[0].producer_organization_id)return c.json(reject('Kitchen is not assigned to an active supplier'),422);
+   const contract=await pool.query<{id:string}>("SELECT id FROM customer_contracts WHERE buyer_organization_id=$1 AND producer_organization_id=$2 AND status='ACTIVE' AND valid_from<=$3::date AND (valid_to IS NULL OR valid_to>=$3::date) AND (kitchen_id IS NULL OR kitchen_id=$4) ORDER BY (kitchen_id IS NOT NULL) DESC,version DESC LIMIT 1",[c.get('organizationId'),kitchen.rows[0].producer_organization_id,deliveryDate,kitchenId]);
+   if(!contract.rowCount)return c.json(reject('No active commercial contract for this kitchen and delivery date. Contact your account manager.'),409);
+   const q=await pool.query(`SELECT DISTINCT ON (pv.id) pv.id,pv.sku,v.name AS vegetable,pv.method_code AS preparation,
+    pv.size_kind,pv.size_number,pv.size_unit,pv.size_label,pv.image_url,
+    r.price_paise_per_kg,r.minimum_grams,r.increment_grams,c.delivery_fee_paise
+    FROM contract_price_rules r JOIN customer_contracts c ON c.id=r.contract_id
+    JOIN product_variants pv ON pv.id=r.variant_id JOIN vegetables v ON v.id=pv.vegetable_id
+    WHERE c.id=$1 AND r.status='APPROVED' AND r.effective_from<=$2::date
+     AND (r.effective_to IS NULL OR r.effective_to>=$2::date)
+     AND (r.kitchen_id IS NULL OR r.kitchen_id=$3) AND pv.active=true AND v.active=true
+    ORDER BY pv.id,(r.kitchen_id IS NOT NULL) DESC,r.version DESC`,[contract.rows[0].id,deliveryDate,kitchenId]);
+   return c.json(q.rows);
+  }
   const q=await pool.query(`SELECT pv.id,pv.sku,v.name AS vegetable,pv.method_code AS preparation,
- pv.size_kind,pv.size_number,pv.size_unit,pv.size_label,pv.image_url,pv.price_paise_per_kg,
- pv.minimum_grams,pv.increment_grams FROM product_variants pv
- JOIN vegetables v ON v.id=pv.vegetable_id WHERE pv.active=true AND v.active=true ORDER BY v.name,pv.sku`);
+   pv.size_kind,pv.size_number,pv.size_unit,pv.size_label,pv.image_url,pv.price_paise_per_kg,
+   pv.minimum_grams,pv.increment_grams FROM product_variants pv
+   JOIN vegetables v ON v.id=pv.vegetable_id WHERE pv.active=true AND v.active=true ORDER BY v.name,pv.sku`);
   return c.json(q.rows);
  });
  app.get('/v1/orders',async c=>{
@@ -132,18 +155,27 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
    if(count.rows[0].n>=slot.capacity_orders){await client.query('ROLLBACK');return c.json(reject('Slot full'),409);}
    const ids=data.items.map(i=>i.variantId);
    if(new Set(ids).size!==ids.length){await client.query('ROLLBACK');return c.json(reject('Duplicate variant'),422);}
-   const variants=await client.query('SELECT id,price_paise_per_kg,minimum_grams,increment_grams FROM product_variants WHERE active=true AND id=ANY($1::uuid[])',[ids]);
-   const prices=new Map<string,{price_paise_per_kg:number;minimum_grams:number;increment_grams:number}>(variants.rows.map(v=>[v.id,v]));
-   if(prices.size!==ids.length||data.items.some(i=>{const v=prices.get(i.variantId);return !v||i.grams<v.minimum_grams||(i.grams-v.minimum_grams)%v.increment_grams!==0;})){await client.query('ROLLBACK');return c.json(reject('Invalid variant or quantity'),422);}
-   const inserted=await client.query('INSERT INTO orders(organization_id,kitchen_id,slot_id,delivery_date,idempotency_key,producer_organization_id) VALUES($1,$2,$3,$4::date,$5,$6) RETURNING id',[c.get('organizationId'),data.kitchenId,data.slotId,data.deliveryDate,data.idempotencyKey,kitchen.rows[0].producer_organization_id]);
+   const pricing=await loadContractPricing(client,c.get('organizationId'),kitchen.rows[0].producer_organization_id,data.kitchenId,data.deliveryDate,ids);
+   if(!pricing){await client.query('ROLLBACK');return c.json(reject('No active commercial contract for this kitchen and delivery date'),409);}
+   const prices=pricing.rules;
+   if(prices.size!==ids.length||data.items.some(i=>{const v=prices.get(i.variantId);return !v||i.grams<v.minimum_grams||(i.grams-v.minimum_grams)%v.increment_grams!==0;})){await client.query('ROLLBACK');return c.json(reject('One or more products are not covered by an approved contract price or quantity rule'),422);}
+   const subtotal=data.items.reduce((sum,item)=>sum+Math.round(prices.get(item.variantId)!.price_paise_per_kg*item.grams/1000),0);
+   if(subtotal<Number(pricing.contract.minimum_order_value_paise)){await client.query('ROLLBACK');return c.json(reject('Order is below the contracted minimum order value'),422);}
+   const deliveryFee=Number(pricing.contract.delivery_fee_paise),total=subtotal+deliveryFee;
+   const pricingSnapshot={contractId:pricing.contract.id,contractVersion:pricing.contract.version,subtotalPaise:subtotal,deliveryFeePaise:deliveryFee,totalPaise:total,currency:'INR'};
+   const inserted=await client.query('INSERT INTO orders(organization_id,kitchen_id,slot_id,delivery_date,idempotency_key,producer_organization_id,contract_id,contract_version,subtotal_paise,delivery_fee_paise,total_paise,pricing_snapshot) VALUES($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) RETURNING id',[c.get('organizationId'),data.kitchenId,data.slotId,data.deliveryDate,data.idempotencyKey,kitchen.rows[0].producer_organization_id,pricing.contract.id,pricing.contract.version,subtotal,deliveryFee,total,JSON.stringify(pricingSnapshot)]);
    const orderId:string=inserted.rows[0].id;
-   for(const item of data.items){const v=prices.get(item.variantId)!;const amount=Math.round(v.price_paise_per_kg*item.grams/1000);await client.query('INSERT INTO order_items(order_id,variant_id,grams,price_paise_per_kg,line_total_paise) VALUES($1,$2,$3,$4,$5)',[orderId,item.variantId,item.grams,v.price_paise_per_kg,amount]);}
+   for(const item of data.items){const v=prices.get(item.variantId)!;const amount=Math.round(v.price_paise_per_kg*item.grams/1000);
+    const itemSnapshot={priceRuleId:v.id,pricePaisePerKg:v.price_paise_per_kg,minimumGrams:v.minimum_grams,incrementGrams:v.increment_grams,serviceDate:data.deliveryDate};
+    await client.query('INSERT INTO order_items(order_id,variant_id,grams,price_paise_per_kg,line_total_paise,contract_price_rule_id,pricing_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)',[orderId,item.variantId,item.grams,v.price_paise_per_kg,amount,v.id,JSON.stringify(itemSnapshot)]);
+   }
    await client.query('INSERT INTO slot_reservations(slot_id,delivery_date,order_id) VALUES($1,$2::date,$3)',[data.slotId,data.deliveryDate,orderId]);
    await insertGeoEvent(client,{...data.event,subjectId:orderId},c.get('organizationId'),c.get('userId'));
    await client.query('COMMIT');return c.json({id:orderId,replayed:false},201);
   }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
  });
  app.route('/v1',createRecurrenceRoutes(pool,clock));
+ app.route('/v1',createCommercialRoutes(pool));
  app.route('/v1',createCatalogAdminRoutes(pool));
  app.route('/v1',createAdminRoutes(pool));
  app.route('/v1',createOperationsRoutes(pool));
