@@ -26,7 +26,7 @@ export function createQuoteRoutes(pool:Pool,clock:()=>Date=()=>new Date()){
   const data=parse(await c.req.json().catch(()=>null),quoteInput),org=c.get('organizationId');
   const fingerprint=JSON.stringify({kitchenId:data.kitchenId,slotId:data.slotId,deliveryDate:data.deliveryDate,items:[...data.items].sort((a,b)=>a.variantId.localeCompare(b.variantId))});
   const result=await inTransaction(pool,async tx=>{
-   const existing=await tx.query("SELECT id,quote_number,state FROM quotes WHERE buyer_organization_id=$1 AND idempotency_key=$2 FOR UPDATE",[org,data.idempotencyKey]);
+   const existing=await tx.query("SELECT id,quote_number,state,request_fingerprint FROM quotes WHERE buyer_organization_id=$1 AND idempotency_key=$2 FOR UPDATE",[org,data.idempotencyKey]);
    if(existing.rowCount){
     if(existing.rows[0].request_fingerprint!==fingerprint)throw new BusinessFailure(409,'This idempotency key was already used for a different quote request');
     return {id:existing.rows[0].id,quoteNumber:existing.rows[0].quote_number,state:existing.rows[0].state,replayed:true};
@@ -80,9 +80,10 @@ export function createQuoteRoutes(pool:Pool,clock:()=>Date=()=>new Date()){
   if(!canAny(c.get('roles'),'quotes:propose')&&!canAny(c.get('roles'),'quotes:manage'))throw new BusinessFailure(403,'Permission denied');
   const id=idParam(c,'id'),data=parse(await c.req.json().catch(()=>null),proposalInput);
   const result=await inTransaction(pool,async tx=>{
-   const q=await tx.query("SELECT id,state,subtotal_paise,delivery_fee_paise FROM quotes WHERE id=$1 AND producer_organization_id=$2 FOR UPDATE",[id,c.get('organizationId')]);
+   const q=await tx.query("SELECT id,state,subtotal_paise,delivery_fee_paise,valid_until FROM quotes WHERE id=$1 AND producer_organization_id=$2 FOR UPDATE",[id,c.get('organizationId')]);
    if(!q.rowCount)throw new BusinessFailure(404,'Quote not found');
    if(q.rows[0].state!=='REQUESTED')throw new BusinessFailure(409,'Only requested quotes can be proposed');
+   if(new Date(q.rows[0].valid_until).getTime()<=clock().getTime()){await tx.query("UPDATE quotes SET state='EXPIRED',updated_at=now() WHERE id=$1",[id]);return {expired:true as const};}
    if(data.discountPaise>Number(q.rows[0].subtotal_paise))throw new BusinessFailure(422,'Discount cannot exceed the quote subtotal');
    if(data.discountPaise>0&&!canAny(c.get('roles'),'quotes:manage'))throw new BusinessFailure(403,'Only an authorised manager may approve a quote discount');
    const total=Number(q.rows[0].subtotal_paise)-data.discountPaise+Number(q.rows[0].delivery_fee_paise);
@@ -91,6 +92,7 @@ export function createQuoteRoutes(pool:Pool,clock:()=>Date=()=>new Date()){
    await recordEvent(tx,c.get('organizationId'),c.get('userId'),systemEvent('QUOTE_PROPOSED','QUOTE',id),'QUOTE_PROPOSED','QUOTE',id);
    return {id,state:'PROPOSED',discountPaise:data.discountPaise,totalPaise:total,validUntil};
   });
+  if('expired' in result)return c.json({error:'Quote request expired before a proposal was sent'},409);
   return c.json(result);
  });
  app.post('/quotes/:id/accept',async c=>{
@@ -98,7 +100,7 @@ export function createQuoteRoutes(pool:Pool,clock:()=>Date=()=>new Date()){
   const id=idParam(c,'id');
   const input=parse(await c.req.json().catch(()=>({})),z.object({event:geoEventSchema.optional()}));
   const result=await inTransaction(pool,async tx=>{
-   const quote=await tx.query("SELECT * FROM quotes WHERE id=$1 AND buyer_organization_id=$2 FOR UPDATE",[id,c.get('organizationId')]);
+   const quote=await tx.query("SELECT *,delivery_date::text AS delivery_date_iso FROM quotes WHERE id=$1 AND buyer_organization_id=$2 FOR UPDATE",[id,c.get('organizationId')]);
    if(!quote.rowCount)throw new BusinessFailure(404,'Quote not found');
    const q=quote.rows[0];
    if(q.state==='ACCEPTED'&&q.accepted_order_id)return {id:q.accepted_order_id,replayed:true};
@@ -109,7 +111,12 @@ export function createQuoteRoutes(pool:Pool,clock:()=>Date=()=>new Date()){
    }
    const slotQ=await tx.query("SELECT * FROM delivery_slots WHERE id=$1 FOR UPDATE",[q.slot_id]),slot=slotQ.rows[0];
    if(!slot||!slot.active)throw new BusinessFailure(422,'Delivery slot is no longer available');
-   if(clock().getTime()>=cutoffInstant(q.delivery_date,slotShape(slot)).getTime())throw new BusinessFailure(422,'Delivery cutoff has passed');
+    const kitchen=await tx.query("SELECT zone_code,producer_organization_id FROM kitchens WHERE id=$1 AND organization_id=$2 AND active=true",[q.kitchen_id,q.buyer_organization_id]);
+    if(!kitchen.rowCount||kitchen.rows[0].zone_code!==slot.zone_code||kitchen.rows[0].producer_organization_id!==q.producer_organization_id)throw new BusinessFailure(422,'Kitchen or delivery-zone assignment changed after quote creation');
+    const activeLines=await tx.query("SELECT count(*)::int AS n FROM quote_lines ql JOIN product_variants pv ON pv.id=ql.variant_id JOIN vegetables v ON v.id=pv.vegetable_id WHERE ql.quote_id=$1 AND pv.active=true AND v.active=true",[id]);
+    const lineCount=await tx.query('SELECT count(*)::int AS n FROM quote_lines WHERE quote_id=$1',[id]);
+    if(activeLines.rows[0].n!==lineCount.rows[0].n)throw new BusinessFailure(422,'A quoted product is no longer available; request a revised quote');
+   if(clock().getTime()>=cutoffInstant(q.delivery_date_iso,slotShape(slot)).getTime())throw new BusinessFailure(422,'Delivery cutoff has passed');
    if((await tx.query('SELECT 1 FROM slot_blackouts WHERE slot_id=$1 AND delivery_date=$2::date',[q.slot_id,q.delivery_date])).rowCount)throw new BusinessFailure(422,'Delivery slot is blacked out');
    const count=await tx.query("SELECT count(*)::int AS n FROM slot_reservations WHERE slot_id=$1 AND delivery_date=$2::date",[q.slot_id,q.delivery_date]);
    if(count.rows[0].n>=slot.capacity_orders)throw new BusinessFailure(409,'Delivery slot is full');
