@@ -2,8 +2,8 @@
 
 **Status date:** 22 November 2026  
 **Repository:** bv-prasanna/cut-vegetables  
-**Current main commit:** 73c517413aba321a569c016926c24fcfafd7a73e  
-**Latest CI run:** 44987011105 — 4/4 jobs passed  
+**Current main commit:** cb1605187542af15d2fa564cfa6399a98af34ea5  
+**Latest CI run:** 44990780073 — 4/4 jobs passed  
 **Release state:** private staging candidate only; customer UAT is not certified and production is not ready.
 
 ## What 98% means
@@ -43,6 +43,9 @@ The percentages below are engineering estimates of implemented functionality, no
 **Overall estimate:** core order-to-delivery is approximately 90% backend, 80% web, 85% mobile and 90% automated integration. Full BRD v3 scope is approximately 65–70%. The full product is not at 98% yet.
 
 ## Work completed in the latest implementation batches
+
+- Added a tenant- and role-protected `/v1/ops/production-summary` API that consolidates daily cutter demand by exact SKU across all delivery slots and returns slot-wise quantities plus production/QC/packing progress. Added a real PostgreSQL integration scenario covering two delivery slots and cross-role denial; CI run 44990780073 passed 4/4.
+
 
 - Secure web operational actions for supplier creation, purchase orders, raw-lot receipt, batch start/completion, QC, packing, delivery-run creation, stop assignment and driver POD.
 - Permission-scoped /v1/ops/action-options selectors. The API returns only the records allowed by the authenticated role and organisation.
