@@ -4,9 +4,10 @@ import type {Pool} from 'pg';
 import {canAny,type Role} from './authorization.js';
 import {BusinessFailure,inTransaction,recordEvent,systemEvent,respondError} from './ops-db.js';
 import {geoEventSchema} from './geo-events.js';
+import {localDate} from './scheduling.js';
 type Env={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const uuid=z.string().uuid();
-const date=z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/);
+const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{try{localDate(v);return true;}catch{return false;}});
 const event=geoEventSchema.optional();
 const contractInput=z.object({
  buyerOrganizationId:uuid,kitchenId:uuid.optional(),

@@ -79,7 +79,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    buyerOrganizationId:customerOrg,kitchenId,contractCode:'UAT-KITCHEN-001',name:'UAT Kitchen Contract',
    validFrom:today,minimumOrderValuePaise:0,deliveryFeePaise:1500,paymentTermsDays:7
   });
-  expect(createdContract.status).toBe(201);
+  expect(createdContract.status,await createdContract.clone().text()).toBe(201);
   contractId=(await createdContract.json() as {id:string}).id;
   const priceRule=await request('/v1/admin/contracts/'+contractId+'/prices','POST',{
    variantId,pricePaisePerKg:basePrice+250,minimumGrams,incrementGrams,effectiveFrom:today
