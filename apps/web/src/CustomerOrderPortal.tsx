@@ -47,6 +47,7 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const [status,setStatus]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const onLogoutRef=useRef(onLogout);
  const pendingOrderRef=useRef<{fingerprint:string;key:string}|null>(null);
+  const pendingQuoteRef=useRef<{fingerprint:string;key:string}|null>(null);
  const previousKitchen=useRef('');
  useEffect(()=>{onLogoutRef.current=onLogout;},[onLogout]);
  const call=useCallback(async<T,>(path:string,method='GET',data?:unknown):Promise<T>=>{
@@ -82,7 +83,9 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  },[kitchen,date,call]);
  const visible=useMemo(()=>products.filter(p=>[p.vegetable,p.preparation,p.sku,String(p.size_number||p.size_label)].join(' ').toLowerCase().includes(search.toLowerCase())),[products,search]);
  const selected=useMemo(()=>Object.entries(basket).filter(([,grams])=>grams>0).map(([variantId,grams])=>({variantId,grams})),[basket]);
- const total=selected.reduce((sum,item)=>sum+Math.round((products.find(p=>p.id===item.variantId)?.price_paise_per_kg||0)*item.grams/1000),0);
+ const subtotal=selected.reduce((sum,item)=>sum+Math.round((products.find(p=>p.id===item.variantId)?.price_paise_per_kg||0)*item.grams/1000),0);
+  const deliveryFee=selected.length?Number(products.find(p=>p.id===selected[0].variantId)?.delivery_fee_paise||0):0;
+  const total=subtotal+deliveryFee;
  const selectedKitchen=kitchens.find(k=>k.id===kitchen);
  const suitable=slots.filter(s=>s.zone_code===selectedKitchen?.zone_code);
  function change(v:Product,delta:1|-1){
