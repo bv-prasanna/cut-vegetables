@@ -26,7 +26,8 @@ type Props = {
   onSelectProduct: (v: StoreVariant) => void;
 };
 
-const PUBLIC_API_BASE=(import.meta.env.VITE_API_BASE_URL||'/api').replace(/\\/$/,'');
+const rawApiBase=import.meta.env.VITE_API_BASE_URL||'/api';
+const PUBLIC_API_BASE=rawApiBase.endsWith('/')?rawApiBase.slice(0,-1):rawApiBase;
 
 const HERO_FALLBACK: Slide[] = [
  {id:'h1',eyebrow:'READY FOR GREAT KITCHENS',headline:'Freshly Cut.\nHygienically Packed.\nDelivered On Time.',description:'Precision-prepared vegetables for restaurants, hotels, PG kitchens, caterers and wedding halls.',imageUrl:'https://images.unsplash.com/photo-1543362906-acfc16c67564?auto=format&fit=crop&w=1800&q=85',active:true,sortOrder:0},
