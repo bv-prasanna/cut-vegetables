@@ -51,7 +51,7 @@ export function createStaffBoardRoutes(pool:Pool){
   if(!canAny(c.get('roles'),'production:read'))return c.json(reject('Forbidden'),403);
   const p=params({date:c.req.query('date')});
   if(!p.success)return c.json(reject('Valid date YYYY-MM-DD is required'),400);
-  const q=await pool.query(\`
+  const q=await pool.query(`
    WITH slot_demand AS (
     SELECT o.slot_id,ds.label AS slot_label,ds.start_minute,oi.variant_id,
      pv.sku,v.name AS vegetable,pv.method_code AS preparation,
@@ -93,7 +93,7 @@ export function createStaffBoardRoutes(pool:Pool){
     LEFT JOIN pack_progress pp ON pp.slot_id=sd.slot_id AND pp.variant_id=sd.variant_id
    GROUP BY sd.variant_id,sd.sku,sd.vegetable,sd.preparation,sd.size
    ORDER BY sd.vegetable,sd.preparation,sd.size
-  \`,[c.get('organizationId'),p.data.date]);
+  `,[c.get('organizationId'),p.data.date]);
   return c.json(q.rows.map(row=>({...row,daily_required_grams:toNumber(row.daily_required_grams),
    order_count:toNumber(row.order_count),input_grams:toNumber(row.input_grams),
    qc_approved_grams:toNumber(row.qc_approved_grams),packed_grams:toNumber(row.packed_grams)})));
