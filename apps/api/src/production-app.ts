@@ -139,14 +139,24 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
   if(!parsed.success)return c.json({error:'Invalid order',issues:parsed.error.flatten()},400);
   const data=parsed.data;try{localDate(data.deliveryDate)}catch{return c.json(reject('Invalid delivery date'),400);}
   if(data.event.eventType!=='ORDER_CREATED')return c.json(reject('Expected ORDER_CREATED audit event'),400);
+  const requestFingerprint=JSON.stringify({
+   kitchenId:data.kitchenId,slotId:data.slotId,deliveryDate:data.deliveryDate,
+   items:[...data.items].sort((a,b)=>a.variantId.localeCompare(b.variantId))
+  });
   const client=await pool.connect();
   try{
    await client.query('BEGIN');
    // Lock the slot row to serialize reservations and capacity checks across processes.
    const slotQ=await client.query('SELECT * FROM delivery_slots WHERE id=$1 FOR UPDATE',[data.slotId]);
    const slot=slotQ.rows[0];if(!slot||!slot.active){await client.query('ROLLBACK');return c.json(reject('Slot unavailable'),422);}
-   const existing=await client.query('SELECT id FROM orders WHERE organization_id=$1 AND idempotency_key=$2',[c.get('organizationId'),data.idempotencyKey]);
-   if(existing.rowCount){await client.query('COMMIT');return c.json({id:existing.rows[0].id,replayed:true});}
+   const existing=await client.query('SELECT id,request_fingerprint FROM orders WHERE organization_id=$1 AND idempotency_key=$2 FOR UPDATE',[c.get('organizationId'),data.idempotencyKey]);
+   if(existing.rowCount){
+    if(!existing.rows[0].request_fingerprint||existing.rows[0].request_fingerprint!==requestFingerprint){
+     await client.query('ROLLBACK');
+     return c.json(reject('This idempotency key was already used for a different or unverifiable order request. Start a new order.'),409);
+    }
+    await client.query('COMMIT');return c.json({id:existing.rows[0].id,replayed:true});
+   }
    const kitchen=await client.query('SELECT id,zone_code,producer_organization_id FROM kitchens WHERE id=$1 AND organization_id=$2 AND active=true',[data.kitchenId,c.get('organizationId')]);
    if(!kitchen.rowCount||kitchen.rows[0].zone_code!==slot.zone_code||!kitchen.rows[0].producer_organization_id){await client.query('ROLLBACK');return c.json(reject('Kitchen, zone or producer assignment unavailable'),422);}
    if(clock().getTime()>=cutoffInstant(data.deliveryDate,{id:slot.id,label:slot.label,startMinute:slot.start_minute,endMinute:slot.end_minute,cutoffDayOffset:slot.cutoff_day_offset,cutoffMinute:slot.cutoff_minute,capacityOrders:slot.capacity_orders,active:slot.active}).getTime()){await client.query('ROLLBACK');return c.json(reject('Slot cutoff reached'),422);}
@@ -164,7 +174,7 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
    if(subtotal<Number(pricing.contract.minimum_order_value_paise)){await client.query('ROLLBACK');return c.json(reject('Order is below the contracted minimum order value'),422);}
    const deliveryFee=Number(pricing.contract.delivery_fee_paise),total=subtotal+deliveryFee;
    const pricingSnapshot={contractId:pricing.contract.id,contractVersion:pricing.contract.version,subtotalPaise:subtotal,deliveryFeePaise:deliveryFee,totalPaise:total,currency:'INR'};
-   const inserted=await client.query('INSERT INTO orders(organization_id,kitchen_id,slot_id,delivery_date,idempotency_key,producer_organization_id,contract_id,contract_version,subtotal_paise,delivery_fee_paise,total_paise,pricing_snapshot) VALUES($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) RETURNING id',[c.get('organizationId'),data.kitchenId,data.slotId,data.deliveryDate,data.idempotencyKey,kitchen.rows[0].producer_organization_id,pricing.contract.id,pricing.contract.version,subtotal,deliveryFee,total,JSON.stringify(pricingSnapshot)]);
+   const inserted=await client.query('INSERT INTO orders(organization_id,kitchen_id,slot_id,delivery_date,idempotency_key,request_fingerprint,producer_organization_id,contract_id,contract_version,subtotal_paise,delivery_fee_paise,total_paise,pricing_snapshot) VALUES($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb) RETURNING id',[c.get('organizationId'),data.kitchenId,data.slotId,data.deliveryDate,data.idempotencyKey,requestFingerprint,kitchen.rows[0].producer_organization_id,pricing.contract.id,pricing.contract.version,subtotal,deliveryFee,total,JSON.stringify(pricingSnapshot)]);
    const orderId:string=inserted.rows[0].id;
    for(const item of data.items){const v=prices.get(item.variantId)!;const amount=Math.round(v.price_paise_per_kg*item.grams/1000);
     const itemSnapshot={priceRuleId:v.id,pricePaisePerKg:v.price_paise_per_kg,minimumGrams:v.minimum_grams,incrementGrams:v.increment_grams,serviceDate:data.deliveryDate};
