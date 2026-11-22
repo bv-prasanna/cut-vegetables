@@ -6,8 +6,8 @@
 
 - Customer UAT: **NOT CERTIFIED**
 - Production release: **NOT READY**
-- Current main commit: 73c517413aba321a569c016926c24fcfafd7a73e
-- Latest CI run: 44987011105 — API/Web, PostgreSQL 16, Expo mobile and Chromium jobs all passed (4/4).
+- Current main commit: cb1605187542af15d2fa564cfa6399a98af34ea5
+- Latest CI run: 44990780073 — API/Web, PostgreSQL 16, Expo mobile and Chromium jobs all passed (4/4).
 
 ## Implemented and CI-verified
 
@@ -15,6 +15,7 @@
 - Customer one-off and recurring ordering, server-side cutoff/slot checks, idempotency and recurrence generation service.
 - Procurement/raw lots, production/yield, QC, packing, dispatch, assigned-driver POD and auditable location/unavailable events.
 - Secure web operational actions with selection-driven records; server checks permissions and organisation scope.
+- Added a protected all-slot daily production summary endpoint with a real PostgreSQL multi-slot aggregation and role-denial test (CI 44990780073, 4/4 passed). The secure web screen still needs to consume and display this summary before the cutter-board UI item can be signed off.
 - Expo secure JWT mobile app with role-specific operational actions and selection-based IDs.
 - Secure marketing CMS for scheduled hero banners and announcements; public content filters by active publication window.
 - GitHub Actions: API/Web typecheck, tests/build; PostgreSQL 16 integration; Expo typecheck/tests; Chromium browser flows.
