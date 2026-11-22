@@ -161,6 +161,28 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(Number(snapshot.rows[0].total_paise)).toBe(Number(snapshot.rows[0].subtotal_paise)+1500);
  });
 
+
+ it('cancels a confirmed customer order before cutoff and releases its slot reservation exactly once',async()=>{
+  const created=await request('/v1/orders','POST',{
+   kitchenId,slotId,deliveryDate,idempotencyKey:'integration-cancel-order-key-0001',
+   items:[{variantId,grams}],event
+  },customerToken);
+  expect(created.status).toBe(201);
+  const id=(await created.json() as {id:string}).id;
+  const cancellationEvent={eventType:'ORDER_CANCELLED',subjectType:'ORDER',subjectId:id,
+   location:{source:'UNAVAILABLE',unavailableReason:'CI has no device GPS',consentStatus:'NOT_REQUESTED'},
+   details:{client:'freshprep-ci-cancellation'}};
+  expect((await request('/v1/orders/'+id+'/cancel','POST',{event:cancellationEvent},customerToken)).status).toBe(200);
+  expect(await request('/v1/orders/'+id+'/cancel','POST',{},customerToken)).resolves;
+  const replay=await request('/v1/orders/'+id+'/cancel','POST',{},customerToken);
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toMatchObject({id,state:'CANCELLED',replayed:true});
+  const db=await pool.query<{state:string;reservations:string}>(
+   "SELECT o.state,(SELECT count(*)::text FROM slot_reservations sr WHERE sr.order_id=o.id) AS reservations FROM orders o WHERE o.id=$1",[id]);
+  expect(db.rows[0]).toMatchObject({state:'CANCELLED',reservations:'0'});
+  expect((await request('/v1/orders/'+id+'/cancel','POST',{},'')).status).toBe(401);
+ });
+
  it('consolidates cutter demand across all delivery slots with a slot-wise breakdown',async()=>{
   const slot=await pool.query<{id:string}>(`INSERT INTO delivery_slots
    (zone_code,label,start_minute,end_minute,cutoff_day_offset,cutoff_minute,capacity_orders,active)
