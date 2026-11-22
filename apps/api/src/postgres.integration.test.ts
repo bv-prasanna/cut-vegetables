@@ -46,7 +46,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    app.request('/health'),request('/v1/me'),request('/v1/catalog')
   ]);
   expect(health.status).toBe(200);expect(me.status).toBe(200);expect(cat.status).toBe(200);
-  const products=await cat.json() as {id:string;minimum_grams:number}[];
+  const products=await cat.json() as {id:string;minimum_grams:number;increment_grams:number;price_paise_per_kg:number}[];
   expect(products.length).toBeGreaterThanOrEqual(100);
   variantId=products[0].id;grams=products[0].minimum_grams;basePrice=products[0].price_paise_per_kg;minimumGrams=products[0].minimum_grams;incrementGrams=products[0].increment_grams;
  });
