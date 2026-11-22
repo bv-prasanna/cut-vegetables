@@ -60,11 +60,11 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const refresh=useCallback(async()=>{
   setBusy(true);setError('');
   try{
-   const [k,s,o,r]=await Promise.all([
+   const [k,s,o,r,q]=await Promise.all([
     call<Kitchen[]>('/v1/kitchens'),call<Slot[]>('/v1/delivery-slots'),
-    call<Order[]>('/v1/orders'),call<Schedule[]>('/v1/recurrences')
+    call<Order[]>('/v1/orders'),call<Schedule[]>('/v1/recurrences'),call<Quote[]>('/v1/quotes')
    ]);
-   setKitchens(k);setSlots(s);setOrders(o);setSchedules(r);
+   setKitchens(k);setSlots(s);setOrders(o);setSchedules(r);setQuotes(q);
    setKitchen(old=>k.some(x=>x.id===old)?old:k[0]?.id||'');
    if(!k.length)setProducts([]);
   }catch(e){setError(e instanceof Error?e.message:'Unable to load ordering');}
