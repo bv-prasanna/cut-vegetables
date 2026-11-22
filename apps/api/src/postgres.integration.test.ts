@@ -16,7 +16,7 @@ type Created={organizationId:string;kitchenId:string};
 suite('real PostgreSQL UAT and negative flows',()=>{
  let pool:Pool;
  let app:ReturnType<typeof createProductionApp>;
- let adminToken='',customerToken='',customerOrg='',kitchenId='',slotId='',variantId='',grams=500,deliveryDate='',producerOrg='',orderId='';
+ let adminToken='',customerToken='',customerOrg='',kitchenId='',slotId='',variantId='',grams=500,deliveryDate='',producerOrg='',orderId='',contractId='',basePrice=0,minimumGrams=0,incrementGrams=0;
  const event={eventType:'ORDER_CREATED',subjectType:'ORDER',subjectId:'pending',
   location:{source:'UNAVAILABLE',unavailableReason:'CI cannot read device GPS',consentStatus:'NOT_REQUESTED'},
   details:{client:'ci-integration'}};
@@ -48,7 +48,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(health.status).toBe(200);expect(me.status).toBe(200);expect(cat.status).toBe(200);
   const products=await cat.json() as {id:string;minimum_grams:number}[];
   expect(products.length).toBeGreaterThanOrEqual(100);
-  variantId=products[0].id;grams=products[0].minimum_grams;
+  variantId=products[0].id;grams=products[0].minimum_grams;basePrice=products[0].price_paise_per_kg;minimumGrams=products[0].minimum_grams;incrementGrams=products[0].increment_grams;
  });
  it('rejects untrusted role header and unauthorised endpoints',async()=>{
   expect((await app.request('/v1/admin/staff',{headers:{'x-role':'SUPERADMIN'}})).status).toBe(401);
@@ -72,6 +72,27 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   const kitchenRes=await request('/v1/kitchens','GET',undefined,customerToken);
   expect(kitchenRes.status).toBe(200);
   expect((await kitchenRes.json() as {id:string}[]).map(x=>x.id)).toContain(kitchenId);
+  expect((await request('/v1/catalog?kitchenId='+kitchenId,'GET',undefined,customerToken)).status).toBe(409);
+  expect((await request('/v1/admin/contracts','GET',undefined,customerToken)).status).toBe(403);
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const createdContract=await request('/v1/admin/contracts','POST',{
+   buyerOrganizationId:customerOrg,kitchenId,contractCode:'UAT-KITCHEN-001',name:'UAT Kitchen Contract',
+   validFrom:today,minimumOrderValuePaise:0,deliveryFeePaise:1500,paymentTermsDays:7
+  });
+  expect(createdContract.status).toBe(201);
+  contractId=(await createdContract.json() as {id:string}).id;
+  const priceRule=await request('/v1/admin/contracts/'+contractId+'/prices','POST',{
+   variantId,pricePaisePerKg:basePrice+250,minimumGrams,incrementGrams,effectiveFrom:today
+  });
+  expect(priceRule.status).toBe(201);
+  expect(await priceRule.json()).toMatchObject({status:'APPROVED'});
+  const activated=await request('/v1/admin/contracts/'+contractId+'/status','PATCH',{status:'ACTIVE'});
+  expect(activated.status).toBe(200);
+  const contractedCatalog=await request('/v1/catalog?kitchenId='+kitchenId+'&deliveryDate='+deliveryDate,'GET',undefined,customerToken);
+  expect(contractedCatalog.status).toBe(200);
+  const contractedProducts=await contractedCatalog.json() as {id:string;price_paise_per_kg:number;delivery_fee_paise:number}[];
+  expect(contractedProducts.find(x=>x.id===variantId)?.price_paise_per_kg).toBe(basePrice+250);
+  expect(contractedProducts.find(x=>x.id===variantId)?.delivery_fee_paise).toBe(1500);
  });
  it('validates order payloads, rejects invalid quantity and enforces scoped kitchen',async()=>{
   const slots=await request('/v1/delivery-slots','GET',undefined,customerToken);
@@ -96,6 +117,12 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(await replay.json()).toMatchObject({id:created.id,replayed:true});
   const db=await pool.query<{n:string}>('SELECT count(*)::text AS n FROM slot_reservations WHERE order_id=$1',[created.id]);
   expect(Number(db.rows[0].n)).toBe(1);
+  const snapshot=await pool.query<{contract_id:string;subtotal_paise:string;delivery_fee_paise:string;total_paise:string;price_paise_per_kg:string}>(
+   'SELECT o.contract_id,o.subtotal_paise,o.delivery_fee_paise,o.total_paise,oi.price_paise_per_kg FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.id=$1',[created.id]);
+  expect(snapshot.rows[0].contract_id).toBe(contractId);
+  expect(Number(snapshot.rows[0].price_paise_per_kg)).toBe(basePrice+250);
+  expect(Number(snapshot.rows[0].delivery_fee_paise)).toBe(1500);
+  expect(Number(snapshot.rows[0].total_paise)).toBe(Number(snapshot.rows[0].subtotal_paise)+1500);
  });
 
  it('consolidates cutter demand across all delivery slots with a slot-wise breakdown',async()=>{
