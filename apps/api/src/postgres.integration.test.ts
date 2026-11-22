@@ -248,6 +248,43 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(Object.values(customerData).every(rows=>rows.length===0)).toBe(true);
  });
 
+
+ it('publishes scheduled marketing slides and announcements through authenticated admin APIs',async()=>{
+  const now=Date.now();
+  const startsAt=new Date(now-60_000).toISOString(),endsAt=new Date(now+86_400_000).toISOString();
+  const slide={
+   eyebrow:'READY FOR KITCHENS',headline:'Fresh cuts for every kitchen',
+   description:'Precision prepared vegetables for professional kitchens.',
+   imageUrl:'https://example.invalid/freshprep-hero.jpg',
+   mobileImageUrl:'https://example.invalid/freshprep-hero-mobile.jpg',
+   altText:'Freshly prepared vegetables in a kitchen',
+   targetUrl:'https://example.invalid/catalogue',ctaLabel:'Browse catalogue',
+   sortOrder:1,startsAt,endsAt,active:true,audience:'ALL'
+  };
+  const created=await request('/v1/admin/marketing/slides','POST',slide);
+  expect(created.status).toBe(201);
+  const slideId=(await created.json() as {id:string}).id;
+  const adminSlides=await request('/v1/admin/marketing/slides');
+  expect(adminSlides.status).toBe(200);
+  expect((await adminSlides.json() as {id:string;headline:string}[]).some(x=>x.id===slideId&&x.headline===slide.headline)).toBe(true);
+  const publicSlides=await app.request('/home/slides');
+  expect(publicSlides.status).toBe(200);
+  expect((await publicSlides.json() as {id:string}[]).some(x=>x.id===slideId)).toBe(true);
+  const denied=await request('/v1/admin/marketing/slides','POST',slide,customerToken);
+  expect(denied.status).toBe(403);
+  const archived=await request('/v1/admin/marketing/slides/'+slideId,'DELETE');
+  expect(archived.status).toBe(200);
+  expect((await (await app.request('/home/slides')).json() as {id:string}[]).some(x=>x.id===slideId)).toBe(false);
+
+  const announcement={title:'Holiday delivery notice',body:'Please place orders before the published cutoff.',startsAt,endsAt,active:true,audience:'ALL',priority:10,urgency:'INFO'};
+  const notice=await request('/v1/admin/marketing/announcements','POST',announcement);
+  expect(notice.status).toBe(201);
+  const noticeId=(await notice.json() as {id:string}).id;
+  const publicNotices=await app.request('/home/announcements');
+  expect((await publicNotices.json() as {id:string;title:string}[]).some(x=>x.id===noticeId&&x.title===announcement.title)).toBe(true);
+  expect((await request('/v1/admin/marketing/announcements/'+noticeId,'DELETE')).status).toBe(200);
+ });
+
  it('shows only scoped live admin insights and never grants a customer report access',async()=>{
   const staff=await request('/v1/admin/insights');
   expect(staff.status).toBe(200);
