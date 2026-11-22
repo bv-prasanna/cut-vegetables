@@ -180,7 +180,7 @@ async function setScheduleState(s:Schedule,state:'ACTIVE'|'PAUSED'|'CANCELLED'){
  {frequency==='WEEKLY'&&<div className="fp-customer-days">{dayNames.map((n,i)=><button className={weekdays.includes(i)?'selected':''} key={n} onClick={()=>setWeekdays(old=>old.includes(i)?old.filter(x=>x!==i):[...old,i])}>{n}</button>)}</div>}</>}
  <div className="fp-customer-total"><span>Selected products</span><b>{selected.length}</b></div><div className="fp-customer-total"><span>Product subtotal</span><b>{money(subtotal)}</b></div><div className="fp-customer-total"><span>Contract delivery fee</span><b>{money(deliveryFee)}</b></div><div className="fp-customer-total grand"><span>Estimated total incl. delivery</span><b>{money(total)}</b></div>
   {canWrite&&<button className="fp-customer-submit" disabled={busy} onClick={()=>void submit(view==='Recurring')}>{busy?'Processing…':view==='Recurring'?'Create recurring schedule':'Confirm order'}</button>}
-  {canRequestQuote&&view==='Order'&&<button className="fp-customer-quote-button" type="button" disabled={busy||!selected.length} onClick={()=>void requestQuote()}>{busy?'Submitting…':'Request a quote'}</button>}}
+  {canRequestQuote&&view==='Order'&&<button className="fp-customer-quote-button" type="button" disabled={busy||!selected.length} onClick={()=>void requestQuote()}>{busy?'Submitting…':'Request a quote'}</button>}
  <small>Prices are indicative until confirmed. Slot capacity and booking cutoff are checked before your order is accepted. Recurring orders are generated before each cutoff by operations.</small></aside></div>}
  </div>;
 }
