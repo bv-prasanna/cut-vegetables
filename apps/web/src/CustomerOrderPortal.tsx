@@ -45,6 +45,7 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const [status,setStatus]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const onLogoutRef=useRef(onLogout);
  const pendingOrderRef=useRef<{fingerprint:string;key:string}|null>(null);
+ const previousKitchen=useRef('');
  useEffect(()=>{onLogoutRef.current=onLogout;},[onLogout]);
  const call=useCallback(async<T,>(path:string,method='GET',data?:unknown):Promise<T>=>{
   try{return await apiRequest<T>(base,path,{token,method,payload:data});}
@@ -67,10 +68,11 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
   finally{setBusy(false);}
  },[call]);
  useEffect(()=>{void refresh();},[refresh]);
+ useEffect(()=>{if(previousKitchen.current&&previousKitchen.current!==kitchen)setBasket({});previousKitchen.current=kitchen;},[kitchen]);
  useEffect(()=>{
   if(!kitchen){setProducts([]);return;}
   let active=true;
-  setProducts([]);setBasket({});
+  setProducts([]);
   const query='/v1/catalog?kitchenId='+encodeURIComponent(kitchen)+'&deliveryDate='+encodeURIComponent(date);
   void call<Product[]>(query).then(rows=>{if(active){setProducts(rows);setError('');}})
    .catch(e=>{if(active){setProducts([]);setError(e instanceof Error?e.message:'Unable to load contracted catalogue');}});

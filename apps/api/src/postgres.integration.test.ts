@@ -74,7 +74,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect((await kitchenRes.json() as {id:string}[]).map(x=>x.id)).toContain(kitchenId);
   expect((await request('/v1/catalog?kitchenId='+kitchenId,'GET',undefined,customerToken)).status).toBe(409);
   expect((await request('/v1/admin/contracts','GET',undefined,customerToken)).status).toBe(403);
-  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const today=new Date().toISOString().slice(0,10);
   const createdContract=await request('/v1/admin/contracts','POST',{
    buyerOrganizationId:customerOrg,kitchenId,contractCode:'UAT-KITCHEN-001',name:'UAT Kitchen Contract',
    validFrom:today,minimumOrderValuePaise:0,deliveryFeePaise:1500,paymentTermsDays:7

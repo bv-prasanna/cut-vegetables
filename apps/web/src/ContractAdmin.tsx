@@ -5,7 +5,7 @@ type Variant={id:string;sku:string;vegetable:string;method_code:string;size_kind
 type Contract={id:string;contract_code:string;name:string;buyer_organization_id:string;buyer_name:string;kitchen_id:string|null;kitchen:string|null;status:string;valid_from:string;valid_to:string|null;minimum_order_value_paise:number;delivery_fee_paise:number;credit_limit_paise:number|null;payment_terms_days:number};
 type PriceRule={id:string;variant_id:string;sku:string;vegetable:string;method_code:string;size_kind:string;size_number:string|null;size_unit:string|null;size_label:string|null;kitchen_id:string|null;price_paise_per_kg:number;minimum_grams:number;increment_grams:number;effective_from:string;effective_to:string|null;status:string;version:number};
 type Props={base:string;token:string;canManage:boolean;onSessionExpired:()=>void};
-const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const today=()=>{const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const v=Object.fromEntries(p.map(x=>[x.type,x.value]));return v.year+'-'+v.month+'-'+v.day;};
 const money=(paise:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(paise||0)/100);
 export default function ContractAdmin({base,token,canManage,onSessionExpired}:Props){
  const [buyers,setBuyers]=useState<BuyerKitchen[]>([]),[variants,setVariants]=useState<Variant[]>([]),[contracts,setContracts]=useState<Contract[]>([]),[rules,setRules]=useState<PriceRule[]>([]);
