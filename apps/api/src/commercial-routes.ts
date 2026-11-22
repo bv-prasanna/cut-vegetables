@@ -35,6 +35,11 @@ async function assertNoApprovedOverlap(tx:any,contractId:string,variantId:string
 export function createCommercialRoutes(pool:Pool){
  const app=new Hono<Env>();
  app.onError((err,c)=>{const e=respondError(err);if(e.status===500)console.error('Commercial API failed',err);return c.json({error:e.message},e.status);});
+ app.get('/admin/contracts/customers',async c=>{
+  if(!canAny(c.get('roles'),'contracts:read')&&!canAny(c.get('roles'),'contracts:manage')&&!canAny(c.get('roles'),'contracts:propose'))throw new BusinessFailure(403,'Permission denied');
+  const q=await pool.query("SELECT org.id AS organization_id,org.name AS organization_name,k.id AS kitchen_id,k.name AS kitchen_name,k.address,k.zone_code FROM kitchens k JOIN organizations org ON org.id=k.organization_id WHERE k.producer_organization_id=$1 AND k.active=true AND org.kind='CUSTOMER' ORDER BY org.name,k.name LIMIT 1000",[c.get('organizationId')]);
+  return c.json(q.rows);
+ });
  app.get('/admin/contracts',async c=>{
   if(!canAny(c.get('roles'),'contracts:read')&&!canAny(c.get('roles'),'contracts:manage')&&!canAny(c.get('roles'),'contracts:propose'))throw new BusinessFailure(403,'Permission denied');
   const q=await pool.query("SELECT cc.id,cc.contract_code,cc.name,cc.buyer_organization_id,org.name AS buyer_name,cc.kitchen_id,k.name AS kitchen,cc.status,cc.valid_from::text,cc.valid_to::text,cc.minimum_order_value_paise,cc.delivery_fee_paise,cc.credit_limit_paise,cc.payment_terms_days,cc.version,cc.created_at FROM customer_contracts cc JOIN organizations org ON org.id=cc.buyer_organization_id LEFT JOIN kitchens k ON k.id=cc.kitchen_id WHERE cc.producer_organization_id=$1 ORDER BY cc.created_at DESC LIMIT 500",[c.get('organizationId')]);
@@ -115,6 +120,8 @@ export function createCommercialRoutes(pool:Pool){
    const contract=await tx.query("SELECT id,status FROM customer_contracts WHERE id=$1 AND producer_organization_id=$2 FOR UPDATE",[id,c.get('organizationId')]);
    if(!contract.rowCount)throw new BusinessFailure(404,'Contract not found');
    if(data.status==='ACTIVE'){
+    const other=await tx.query("SELECT 1 FROM customer_contracts WHERE producer_organization_id=$1 AND buyer_organization_id=(SELECT buyer_organization_id FROM customer_contracts WHERE id=$2) AND kitchen_id IS NOT DISTINCT FROM (SELECT kitchen_id FROM customer_contracts WHERE id=$2) AND id<>$2 AND status='ACTIVE' AND valid_from<=COALESCE((SELECT valid_to FROM customer_contracts WHERE id=$2),'9999-12-31'::date) AND COALESCE(valid_to,'9999-12-31'::date)>=(SELECT valid_from FROM customer_contracts WHERE id=$2) LIMIT 1",[c.get('organizationId'),id]);
+    if(other.rowCount)throw new BusinessFailure(409,'Another active contract already covers this customer and kitchen date range');
     const rules=await tx.query("SELECT 1 FROM contract_price_rules WHERE contract_id=$1 AND status='APPROVED' LIMIT 1",[id]);
     if(!rules.rowCount)throw new BusinessFailure(409,'Approve at least one price rule before activating this contract');
    }
