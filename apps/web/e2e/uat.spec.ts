@@ -6,7 +6,7 @@ const SLOT='55555555-5555-4555-8555-555555555555';
 const DATE='2026-11-18';
 const activeProduct={id:PRODUCT,sku:'CARROT-10',vegetable:'Carrot',preparation:'DICED',
  size_kind:'numeric',size_number:'10',size_unit:'mm',size_label:null,image_url:'',
- price_paise_per_kg:6000,minimum_grams:500,increment_grams:250};
+ price_paise_per_kg:6000,minimum_grams:500,increment_grams:250,delivery_fee_paise:500};
 const metrics={asOf:'2026-11-10',
  metrics:{upcomingOrders:2,exceptionOrders:0,bookedValuePaise:12000,customersWithOrders:1},
  daily:[{date:DATE,orders:2,grams:1500,bookedPaise:12000}],
@@ -14,6 +14,7 @@ const metrics={asOf:'2026-11-10',
  slots:[{date:DATE,label:'Morning delivery',orders:2,capacity:30}],
  recentEvents:[{event_type:'ORDER_CREATED',subject_type:'ORDER',created_at:'2026-11-10T06:20:00Z'}]};
 async function mockApi(page:Page,roles:string[]|null){
+ let mockQuote:{id:string;quote_number:number;state:string;delivery_date:string;valid_until:string;subtotal_paise:number;delivery_fee_paise:number;discount_paise:number;total_paise:number;note:string|null;accepted_order_id:string|null}|null=null;
  await page.route('**/api/**',async route=>{
   const req=route.request(),p=new URL(req.url()).pathname.replace(/^\/api/,'');
   const ok=(data:unknown,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
@@ -23,11 +24,21 @@ async function mockApi(page:Page,roles:string[]|null){
   if(p==='/v1/admin/overview')return ok({staff:2,activeKitchens:1,ordersByState:[]});
   if(p==='/v1/admin/staff')return ok([{id:'a',email:'team@freshprep.test',roles:['OPERATOR'],active:true}]);
   if(p==='/v1/admin/customers')return ok([{kitchen_id:KITCHEN,kitchen_name:'Commercial Kitchen',organization_name:'UAT Client',address:'Bengaluru test address',zone_code:'BENGALURU_TEST'}]);
+  if(p==='/v1/admin/contracts/customers')return ok([]);
+  if(p==='/v1/admin/contracts')return ok([]);
+  if(p==='/v1/admin/quotes')return ok([]);
   if(p==='/v1/admin/insights')return ok(metrics);
   if(p==='/v1/admin/vegetables')return ok([{id:'33333333-3333-4333-8333-333333333334',name:'Carrot',active:true}]);
   if(p==='/v1/admin/variants')return ok([]);
   if(p==='/v1/admin/slots')return ok([]);
   if(p==='/v1/catalog')return ok([activeProduct]);
+  if(p==='/v1/quotes'&&req.method()==='POST'){
+   mockQuote={id:'88888888-8888-4888-8888-888888888888',quote_number:1,state:'REQUESTED',delivery_date:(req.postDataJSON() as {deliveryDate:string}).deliveryDate,valid_until:'2026-11-30T12:00:00.000Z',subtotal_paise:3000,delivery_fee_paise:500,discount_paise:0,total_paise:3500,note:null,accepted_order_id:null};
+   return ok({id:mockQuote.id,quoteNumber:mockQuote.quote_number},201);
+  }
+  if(p==='/v1/quotes')return ok(mockQuote?[mockQuote]:[]);
+  if(p.startsWith('/v1/quotes/')&&p.endsWith('/accept'))return ok({id:'99999999-9999-4999-8999-999999999998',replayed:false},201);
+  if(p.startsWith('/v1/quotes/')&&p.endsWith('/reject'))return ok({ok:true});
   if(p==='/v1/kitchens')return ok([{id:KITCHEN,name:'UAT Kitchen',address:'Bengaluru test address',zone_code:'BENGALURU_TEST'}]);
   if(p==='/v1/delivery-slots')return ok([{id:SLOT,zone_code:'BENGALURU_TEST',label:'Morning 05:00–08:00',
    start_minute:300,end_minute:480,cutoff_day_offset:1,cutoff_minute:1380,capacity_orders:30}]);
@@ -117,6 +128,9 @@ test('admin: dashboard, staff, customers, catalogue and slots all mount without 
  await expect(page.getByRole('heading',{name:'Product Master'})).toBeVisible();
  await page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('button',{name:'Slots'}).click();
  await expect(page.getByRole('heading',{name:'Delivery Windows',exact:true})).toBeVisible();
+ await page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('button',{name:'Contracts'}).click();
+ await expect(page.getByRole('heading',{name:'Buyer contracts & price books'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Buyer quote requests'})).toBeVisible();
  expect(errors).toEqual([]);
 });
 test('customer: role-scoped buying catalogue has no admin overview or staff controls',async({page},info)=>{
@@ -129,6 +143,18 @@ test('customer: role-scoped buying catalogue has no admin overview or staff cont
  await expect(page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('button',{name:'Staff'})).toHaveCount(0);
  await assertNoHorizontalOverflow(page);
  await page.screenshot({path:info.outputPath('customer-catalogue.png'),fullPage:true});
+});
+test('customer can request a quote and review its proposal queue',async({page})=>{
+ await mockApi(page,['CUSTOMER_BUYER']);
+ await page.goto('/');await signin(page);
+ await expect(page.getByRole('heading',{name:'Prepared vegetables'})).toBeVisible();
+ await page.getByLabel('Delivery date').fill(DATE);
+ await page.getByLabel('Delivery window').selectOption(SLOT);
+ await page.getByRole('button',{name:'Increase Carrot'}).click();
+ await page.getByRole('button',{name:'Request a quote'}).click();
+ await expect(page.locator('.fp-customer-ok')).toContainText('Quote request submitted: #1');
+ await expect(page.getByRole('heading',{name:'Quote requests'})).toBeVisible();
+ await expect(page.getByText('Quote #1 · REQUESTED')).toBeVisible();
 });
 test('driver: assigned delivery only; no admin or customer orders',async({page})=>{
  await mockApi(page,['DRIVER']);
