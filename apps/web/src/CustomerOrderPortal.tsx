@@ -56,16 +56,26 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const refresh=useCallback(async()=>{
   setBusy(true);setError('');
   try{
-   const [p,k,s,o,r]=await Promise.all([
-    call<Product[]>('/v1/catalog'),call<Kitchen[]>('/v1/kitchens'),call<Slot[]>('/v1/delivery-slots'),
+   const [k,s,o,r]=await Promise.all([
+    call<Kitchen[]>('/v1/kitchens'),call<Slot[]>('/v1/delivery-slots'),
     call<Order[]>('/v1/orders'),call<Schedule[]>('/v1/recurrences')
    ]);
-   setProducts(p);setKitchens(k);setSlots(s);setOrders(o);setSchedules(r);
+   setKitchens(k);setSlots(s);setOrders(o);setSchedules(r);
    setKitchen(old=>k.some(x=>x.id===old)?old:k[0]?.id||'');
+   if(!k.length)setProducts([]);
   }catch(e){setError(e instanceof Error?e.message:'Unable to load ordering');}
   finally{setBusy(false);}
  },[call]);
  useEffect(()=>{void refresh();},[refresh]);
+ useEffect(()=>{
+  if(!kitchen){setProducts([]);return;}
+  let active=true;
+  setProducts([]);setBasket({});
+  const query='/v1/catalog?kitchenId='+encodeURIComponent(kitchen)+'&deliveryDate='+encodeURIComponent(date);
+  void call<Product[]>(query).then(rows=>{if(active){setProducts(rows);setError('');}})
+   .catch(e=>{if(active){setProducts([]);setError(e instanceof Error?e.message:'Unable to load contracted catalogue');}});
+  return()=>{active=false;};
+ },[kitchen,date,call]);
  const visible=useMemo(()=>products.filter(p=>[p.vegetable,p.preparation,p.sku,String(p.size_number||p.size_label)].join(' ').toLowerCase().includes(search.toLowerCase())),[products,search]);
  const selected=useMemo(()=>Object.entries(basket).filter(([,grams])=>grams>0).map(([variantId,grams])=>({variantId,grams})),[basket]);
  const total=selected.reduce((sum,item)=>sum+Math.round((products.find(p=>p.id===item.variantId)?.price_paise_per_kg||0)*item.grams/1000),0);
