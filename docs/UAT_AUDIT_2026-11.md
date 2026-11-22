@@ -1,6 +1,8 @@
-# FreshPrep — UAT audit and evidence (9 November 2026)
+# FreshPrep — UAT audit and evidence (updated 22 November 2026)
 
-Repository: bv-prasanna/cut-vegetables; Branch: feat/typescript-platform-foundation; Draft PR #1.
+Repository: bv-prasanna/cut-vegetables; Branch: main; PR #1 merged on 11 November 2026.
+
+Latest CI run 44987011105 passed all four automated jobs at commit 73c517413aba321a569c016926c24fcfafd7a73e. Automated checks are not customer UAT certification.
 Design baseline: previously approved FreshPrep premium-green website mockup, adapted to BRD v3. The reusable app-skeleton reference was consulted for role-specific navigation, safe API error handling, workflow governance and quality gates. No blanket migrations or mismatched Next.js templates were imported.
 
 ## Automated verification already implemented
@@ -26,8 +28,8 @@ Check the latest GitHub Actions run for the branch. These checks are automated i
 | Admin dashboard | Real future demand, booked order value, top preparations, slot utilisation, exceptions, audit | Check numbers against pilot ledger and operational reports |
 | Product master / delivery slots | Secure Super Admin product, price, activation, zones, slot capacity and cutoff UI | Full price approvals, item details, real photo upload, holiday and capacity exceptions |
 | Staff and customers | Team roles, onboarding customer organisation/first kitchen | Invites, password recovery, edits/deactivation, multiple kitchens, business approvals |
-| Web procurement/cutting/QC/packing/delivery | Role-specific sidebar, initial workboards and stage summaries | Actual floor workflows, QR scans, operator input controls, exception recovery |
-| Expo | Secure JWT by default, role-specific task cards, clearer consolidated cutting/packing/driver work | Build and install signed APK; test real Android, GPS permission, phone sizes, offline and touch UX |
+| Web procurement/cutting/QC/packing/delivery | Secure role-specific workboards with selection-driven supplier, receipt, batch, QC, pack, run, stop and POD actions | Actual floor workflows, QR scans, label printing, partial/failed delivery and exception recovery |
+| Expo | Secure JWT login, role-specific task cards and selection-based operation records; UUID typing removed from common actions | Build/install signed APK; test real Android, GPS permission, phone sizes, offline and touch UX |
 
 ## Status, success and negative cases
 
@@ -61,3 +63,12 @@ Check the latest GitHub Actions run for the branch. These checks are automated i
 All-green CI means a candidate for PRIVATE CONTROLLED STAGING UAT only. It is not a delivered signed APK, visually inspected page, customer-accepted production build or approved legal/tax handling. Keep PR #1 in draft until documented P0 checks are accepted. Production requires P1 and commercial policy approvals.
 
 See docs/BRD_v3.md, docs/SRS_v3.md, docs/FINAL_UAT_CHECKLIST.md, docs/JWT_DEPLOYMENT.md and docs/RECURRING_ORDERS.md for detailed workflows and steps.
+
+
+## Update — 22 November 2026
+
+- Secure web operational action forms and a permission-scoped /v1/ops/action-options endpoint are now in main.
+- Mobile operational selectors now offer authorised supplier, purchase, vegetable, order-line, raw-lot, batch, driver, run and stop choices.
+- Secure marketing CMS now supports scheduled hero slides and announcements with public active-window filtering and audit events.
+- A best-effort GitHub Actions recurring-order workflow is present; it is not considered operational until its repository secrets and scheduled executions are verified.
+- Full offers/loyalty, finance, notifications/support/returns, account recovery/MFA, signed APK, live staging and physical customer UAT remain open.

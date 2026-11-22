@@ -8,9 +8,9 @@
 - Database-backed login throttling: after eight unsuccessful attempts in a 15-minute window, the corresponding email/organization pair is blocked for 15 minutes. A successful login resets failed attempts.
 - One-time CLI Super Admin bootstrap: password hashed with salted scrypt; advisory transaction lock serializes concurrent bootstrap attempts; refuses an existing SUPERADMIN globally. **No HTTP bootstrap endpoint.**
 - Permission-checked REST endpoints to create staff accounts, assign permitted roles, onboard customer kitchens and review organisation-scoped metrics.
-- Secure web sign-in portal with JWT kept **in memory only** (not localStorage), and admin role management plus read-only PostgreSQL-backed cutting/packing/delivery workboards.
+- Secure web sign-in portal with JWT kept **in memory only** (not localStorage), and role-specific operational workspaces with selection-driven write actions for procurement, production, QC, packing, dispatch and driver POD.
 - Published frontend defaults to blocking the old unauthenticated `/dev/*` screens. The demo API remains loopback-only and must NOT be hosted on Render/Cloudflare.
-- Authenticated operational state transitions and staff workboard API foundations already exist, but production UAT must still verify them against PostgreSQL.
+- Authenticated operational state transitions now have web and mobile selection-based action forms; physical scanning, floor workflows and customer UAT remain pending.
 
 ## 2. Recommended pilot architecture (no required monthly subscription)
 
@@ -127,12 +127,12 @@ After deployment, check HTTPS `/health`, POST `/auth/login`, GET `/v1/me` with B
 ## 6. Security/UAT blockers before public launch
 
 - Tests and production runtime **have not yet been executed in a connected deployment**. Measure passing backend, web, mobile and database integration tests and coverage before launch.
-- Current authenticated web operations views are primarily **read-only**. Real cutting/packing/delivery writes exist in API prototypes but do not yet have fully integrated secure UI, approvals or E2E tests.
+- Secure web and mobile operational writes are now integrated with authenticated APIs and selector choices; QR scanning, physical label printing, exception recovery and full floor UAT remain open.
 - New account bootstrap is one-time and currently does not implement password reset, MFA or account invitation email. Add before customer rollout.
 - Login throttle is email/organization-based, not IP-aware; operationally review lockouts and rate-limit policy before production use.
 - Passwords entered in web admin are sent over HTTPS to the API (never over HTTP in production); handle issuance via secure channels.
-- Expo mobile still uses local demo role switching. A secure token-aware mobile login and assigned-task interface is required before field operation.
-- No durable recurrence materializer, end-to-end procurement-to-invoice or payment workflow has been certified.
+- Expo mobile now uses secure JWT login and role-specific task/action screens. A signed APK and physical Android verification are still required before field operation.
+- Recurrence materialization is implemented and a best-effort GitHub Actions schedule is present, but repository secrets and scheduled execution have not been verified. Finance/invoice/payment workflows remain incomplete.
 - The sample products have illustrative images/prices only.
 
 The platform should be treated as a **private pilot/staging environment**, not production-ready until these blockers are closed.

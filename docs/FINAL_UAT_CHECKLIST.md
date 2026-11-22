@@ -1,12 +1,16 @@
-# FreshPrep release verification checklist — updated 31 October 2026
+# FreshPrep release verification checklist — updated 22 November 2026
 
-**Scope:** `bv-prasanna/cut-vegetables`, branch `feat/typescript-platform-foundation`, draft PR #1.
+**Scope:** bv-prasanna/cut-vegetables, branch main. PR #1 was merged on 11 November 2026.
+
+**Latest automated evidence:** CI run 44987011105 passed 4/4 jobs at commit 73c517413aba321a569c016926c24fcfafd7a73e. This verifies automated builds/tests only; it does not certify customer UAT, live deployment, signed APK or physical operations.
+
+**Current release gate:** private staging candidate only; production is not ready.
 
 ## Install and static quality gates (Windows PowerShell)
 ```powershell
 cd C:\Projects\cut-vegetables
-git checkout feat/typescript-platform-foundation
-git pull origin feat/typescript-platform-foundation
+git checkout main
+git pull origin main
 
 npm install --no-audit --no-fund
 npm run check
@@ -19,10 +23,10 @@ npx expo install --check
 cd ..\..
 ```
 
-Do not merge if any check fails. The assistant has **not** run these checks or claimed coverage.
+Do not accept a release if any check fails. CI has run the repository gates; see the latest Actions run above. Test coverage is not a module-completion percentage.
 
 ## Real PostgreSQL setup & bootstrap
-Apply `0001`–`0008` migrations to a disposable staging DB; only a secure local CLI may create the first Super Admin. Use a 48-byte random JWT secret and HTTPS API host with exact allowed frontend origins. Validate:
+Apply `0001`–`0009` migrations to a disposable staging DB; only a secure local CLI may create the first Super Admin. Use a 48-byte random JWT secret and HTTPS API host with exact allowed frontend origins. Validate:
 - Login rejects wrong password / organisation and returns a 15-minute signed JWT.
 - Forged/expired/revoked JWT returns 401; roles are not taken from request headers or screens.
 - A customer cannot access another customer's orders/recurrences; staff cannot read another producer organisation.
