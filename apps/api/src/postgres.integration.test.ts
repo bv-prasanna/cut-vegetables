@@ -99,9 +99,9 @@ suite('real PostgreSQL UAT and negative flows',()=>{
  });
 
  it('consolidates cutter demand across all delivery slots with a slot-wise breakdown',async()=>{
-  const slot=await pool.query<{id:string}>(\`INSERT INTO delivery_slots
+  const slot=await pool.query<{id:string}>(`INSERT INTO delivery_slots
    (zone_code,label,start_minute,end_minute,cutoff_day_offset,cutoff_minute,capacity_orders,active)
-   VALUES('BENGALURU_DEMO','Afternoon CI',840,1020,0,660,100,true) RETURNING id\`);
+   VALUES('BENGALURU_DEMO','Afternoon CI',840,1020,0,660,100,true) RETURNING id`);
   const secondOrder=await request('/v1/orders','POST',{
    kitchenId,slotId:slot.rows[0].id,deliveryDate,idempotencyKey:'integration-safe-order-key-0002',
    items:[{variantId,grams}],event
