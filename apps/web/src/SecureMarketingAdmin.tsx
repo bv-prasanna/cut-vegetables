@@ -9,7 +9,7 @@ const defaultEnd=()=>localInput(new Date(Date.now()+30*86400000));
 export default function SecureMarketingAdmin({base,token,onSessionExpired}:Props){
  const [slides,setSlides]=useState<Slide[]>([]),[announcements,setAnnouncements]=useState<Announcement[]>([]);
  const [headline,setHeadline]=useState('Freshly cut. Ready for great kitchens.'),[eyebrow,setEyebrow]=useState('READY FOR GREAT KITCHENS');
- const [description,setDescription]=useState('Precision-prepared vegetables for professional kitchens.'),[imageUrl,setImageUrl]=useState('');
+ const [description,setDescription]=useState('Precision-prepared vegetables for professional kitchens.'),[imageUrl,setImageUrl]=useState(''),[mobileImageUrl,setMobileImageUrl]=useState('');
  const [altText,setAltText]=useState('Prepared vegetables for professional kitchens'),[targetUrl,setTargetUrl]=useState('');
  const [ctaLabel,setCtaLabel]=useState('Browse catalogue'),[sortOrder,setSortOrder]=useState('0');
  const [slideStart,setSlideStart]=useState(defaultStart),[slideEnd,setSlideEnd]=useState(defaultEnd);
@@ -36,12 +36,12 @@ export default function SecureMarketingAdmin({base,token,onSessionExpired}:Props
  const date=(v:string)=>new Date(v).toISOString();
  async function publishSlide(e:React.FormEvent){
   e.preventDefault();
-  if(!imageUrl.trim().startsWith('https://')){setError('Use an HTTPS image URL.');return;}
+  if(!imageUrl.trim().startsWith('https://')||(mobileImageUrl&&!mobileImageUrl.trim().startsWith('https://'))){setError('Use HTTPS image URLs.');return;}
   await run(()=>apiRequest(base,'/v1/admin/marketing/slides',{token,method:'POST',payload:{
-   eyebrow,headline,description,imageUrl,altText,targetUrl:targetUrl||undefined,ctaLabel,
+   eyebrow,headline,description,imageUrl,mobileImageUrl:mobileImageUrl||undefined,altText,targetUrl:targetUrl||undefined,ctaLabel,
    sortOrder:Number(sortOrder),startsAt:date(slideStart),endsAt:date(slideEnd),active:true,audience:'ALL'
   }}),'Hero slide published and scheduled.');
-  setHeadline('');setImageUrl('');setTargetUrl('');
+  setHeadline('');setImageUrl('');setMobileImageUrl('');setTargetUrl('');
  }
  async function publishAnnouncement(e:React.FormEvent){
   e.preventDefault();
@@ -62,6 +62,7 @@ export default function SecureMarketingAdmin({base,token,onSessionExpired}:Props
      <label className="fp-ops-field full"><span>Headline</span><input value={headline} onChange={e=>setHeadline(e.target.value)} required/></label>
      <label className="fp-ops-field full"><span>Description</span><input value={description} onChange={e=>setDescription(e.target.value)} required/></label>
      <label className="fp-ops-field full"><span>HTTPS image URL</span><input type="url" value={imageUrl} onChange={e=>setImageUrl(e.target.value)} placeholder="https://…" required/></label>
+     <label className="fp-ops-field full"><span>Mobile image URL (optional HTTPS)</span><input type="url" value={mobileImageUrl} onChange={e=>setMobileImageUrl(e.target.value)} placeholder="https://…"/></label>
      <label className="fp-ops-field full"><span>Image alt text</span><input value={altText} onChange={e=>setAltText(e.target.value)} required/></label>
      <label className="fp-ops-field"><span>CTA label</span><input value={ctaLabel} onChange={e=>setCtaLabel(e.target.value)}/></label>
      <label className="fp-ops-field"><span>Target URL (optional)</span><input type="url" value={targetUrl} onChange={e=>setTargetUrl(e.target.value)}/></label>

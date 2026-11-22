@@ -14,7 +14,7 @@ export type StoreSlot = {
 };
 type Slide = {
   id: string; eyebrow: string; headline: string; description: string;
-  imageUrl: string; active: boolean; sortOrder: number;
+  imageUrl: string; mobileImageUrl?:string; altText?:string; targetUrl?:string; ctaLabel?:string; active: boolean; sortOrder: number;
 };
 type Props = {
   variants: StoreVariant[]; slots: StoreSlot[]; weekdays: number[];
@@ -110,6 +110,7 @@ export default function MarketingHome({variants,slots,weekdays,onSetWeekdays,fre
   {id:'preview-afternoon',label:'2 PM – 5 PM',startMinute:840,endMinute:1020,cutoffDayOffset:0,cutoffMinute:660,capacityOrders:0,active:true}
  ];
  function gotoSlide(delta:number){setActive(i=>(i+delta+slides.length)%slides.length);}
+ function openHeroTarget(){if(hero.targetUrl)window.location.assign(hero.targetUrl);else onCatalogue();}
  function toggleDay(day:number){onSetFrequency('WEEKLY');onSetWeekdays(weekdays.includes(day)?weekdays.filter(i=>i!==day):[...weekdays,day]);}
  return <div className="fp-site">
  <header className="fp-header"><div className="fp-header-inner">
@@ -126,9 +127,9 @@ export default function MarketingHome({variants,slots,weekdays,onSetWeekdays,fre
     <button className="fp-login" onClick={()=>{setNavOpen(false);(onLogin||onCatalogue)();}}>Sign in / Get Started <I name="arrow" size={15}/></button>
  </div></header>
  <section className="fp-hero" aria-label="FreshPrep promotions">
-  <div className="fp-hero-image" style={{backgroundImage:'linear-gradient(90deg, #f6f8f5 0%, rgba(246,248,245,.9) 14%, rgba(246,248,245,0) 43%), url("'+hero.imageUrl+'")'}} />
+  <div className="fp-hero-image" role="img" aria-label={hero.altText||hero.headline} style={{backgroundImage:'linear-gradient(90deg, #f6f8f5 0%, rgba(246,248,245,.9) 14%, rgba(246,248,245,0) 43%), url("'+hero.imageUrl+'")','--fp-hero-mobile-image':'url("'+(hero.mobileImageUrl||hero.imageUrl)+'")'} as React.CSSProperties} />
   <div className="fp-hero-inner"><div className="fp-hero-copy"><div className="fp-eyebrow">{hero.eyebrow}</div><h1>{hero.headline}</h1><p>{hero.description}</p>
-   <div className="fp-hero-buttons"><button className="fp-btn-primary" onClick={onCatalogue}><I name="grid" size={17}/> Browse Catalogue <I name="arrow" size={16}/></button><button className="fp-btn-outline" onClick={onRecurring}><I name="calendar" size={17}/> Start Recurring Order</button></div>
+   <div className="fp-hero-buttons"><button className="fp-btn-primary" onClick={openHeroTarget}><I name="grid" size={17}/> {hero.ctaLabel||'Browse Catalogue'} <I name="arrow" size={16}/></button><button className="fp-btn-outline" onClick={onRecurring}><I name="calendar" size={17}/> Start Recurring Order</button></div>
    <div className="fp-trust-mini"><span><I name="leaf" size={21}/> Farm-fresh focus</span><span><I name="shield" size={21}/> Hygiene-first process</span><span><I name="truck" size={21}/> Planned delivery</span></div></div>
    <div className="fp-handwritten">Same great taste.<br/>Less prep. More possibilities.</div>
   </div>
