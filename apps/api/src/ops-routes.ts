@@ -316,9 +316,9 @@ export function createOperationsRoutes(pool:Pool){
   if(allowed('procurement:read')||allowed('procurement:write')){
    const [suppliers,purchases]=await Promise.all([
     pool.query('SELECT id,name,active FROM suppliers WHERE organization_id=$1 ORDER BY name LIMIT 300',[org]),
-    pool.query(\`SELECT po.id,po.status,po.created_at,po.supplier_id,s.name AS supplier
+    pool.query(`SELECT po.id,po.status,po.created_at,po.supplier_id,s.name AS supplier
      FROM purchase_orders po JOIN suppliers s ON s.id=po.supplier_id
-     WHERE po.organization_id=$1 ORDER BY po.created_at DESC LIMIT 200\`,[org])
+     WHERE po.organization_id=$1 ORDER BY po.created_at DESC LIMIT 200`,[org])
    ]);
    options.suppliers=suppliers.rows;options.purchases=purchases.rows;
   }
@@ -328,33 +328,33 @@ export function createOperationsRoutes(pool:Pool){
   }
   if(allowed('production:read')||allowed('production:write')||allowed('qc:read')||
      allowed('qc:approve')||allowed('packing:read')||allowed('packing:write')){
-   const q=await pool.query(\`SELECT pv.id,pv.vegetable_id,pv.sku,v.name AS vegetable,
+   const q=await pool.query(`SELECT pv.id,pv.vegetable_id,pv.sku,v.name AS vegetable,
      pv.method_code AS preparation,
      CASE WHEN pv.size_kind='numeric' THEN pv.size_number::text||' '||pv.size_unit ELSE pv.size_label END AS size
      FROM product_variants pv JOIN vegetables v ON v.id=pv.vegetable_id
-     WHERE pv.active=true AND v.active=true ORDER BY v.name,pv.method_code,pv.sku LIMIT 1000\`);
+     WHERE pv.active=true AND v.active=true ORDER BY v.name,pv.method_code,pv.sku LIMIT 1000`);
    options.variants=q.rows;
-   const batches=await pool.query(\`SELECT pb.id,pb.order_id,pb.variant_id,pb.raw_lot_id,pb.state,
+   const batches=await pool.query(`SELECT pb.id,pb.order_id,pb.variant_id,pb.raw_lot_id,pb.state,
       pb.input_grams,pb.output_grams,pb.waste_grams,o.delivery_date::text AS delivery_date,
       ds.label AS slot_label,v.name AS vegetable,pv.method_code AS preparation,
       CASE WHEN pv.size_kind='numeric' THEN pv.size_number::text||' '||pv.size_unit ELSE pv.size_label END AS size
      FROM production_batches pb JOIN orders o ON o.id=pb.order_id
       JOIN product_variants pv ON pv.id=pb.variant_id JOIN vegetables v ON v.id=pv.vegetable_id
       JOIN delivery_slots ds ON ds.id=o.slot_id
-     WHERE o.producer_organization_id=$1 ORDER BY o.delivery_date DESC,pb.id DESC LIMIT 300\`,[org]);
+     WHERE o.producer_organization_id=$1 ORDER BY o.delivery_date DESC,pb.id DESC LIMIT 300`,[org]);
    options.batches=batches.rows;
   }
   if(allowed('inventory:read')||allowed('inventory:write')||allowed('procurement:read')||
      allowed('procurement:write')||allowed('production:read')||allowed('production:write')){
-   const q=await pool.query(\`SELECT rl.id,rl.purchase_id,rl.vegetable_id,v.name AS vegetable,
+   const q=await pool.query(`SELECT rl.id,rl.purchase_id,rl.vegetable_id,v.name AS vegetable,
       rl.supplier_lot,rl.usable_grams,rl.received_grams,rl.rejected_grams,rl.received_at
      FROM raw_lots rl JOIN purchase_orders po ON po.id=rl.purchase_id
       JOIN vegetables v ON v.id=rl.vegetable_id
-     WHERE po.organization_id=$1 ORDER BY rl.received_at DESC LIMIT 300\`,[org]);
+     WHERE po.organization_id=$1 ORDER BY rl.received_at DESC LIMIT 300`,[org]);
    options.rawLots=q.rows;
   }
   if(allowed('orders:read')){
-   const q=await pool.query(\`SELECT o.id,o.delivery_date::text AS delivery_date,o.slot_id,
+   const q=await pool.query(`SELECT o.id,o.delivery_date::text AS delivery_date,o.slot_id,
       ds.label AS slot_label,o.state,k.name AS kitchen,org.name AS customer,
       COALESCE(json_agg(json_build_object(
        'variantId',oi.variant_id,'vegetableId',pv.vegetable_id,
@@ -369,13 +369,13 @@ export function createOperationsRoutes(pool:Pool){
       LEFT JOIN vegetables v ON v.id=pv.vegetable_id
      WHERE o.producer_organization_id=$1 AND o.state<>'CANCELLED'
      GROUP BY o.id,ds.label,k.name,org.name
-     ORDER BY o.delivery_date DESC,o.created_at DESC LIMIT 300\`,[org]);
+     ORDER BY o.delivery_date DESC,o.created_at DESC LIMIT 300`,[org]);
    options.orders=q.rows;
   }
   if(allowed('delivery:assign')){
    const [drivers,slots]=await Promise.all([
-    pool.query(\`SELECT u.id,u.email FROM users u JOIN memberships m ON m.user_id=u.id
-     WHERE m.organization_id=$1 AND m.role='DRIVER' AND u.active=true ORDER BY u.email LIMIT 200\`,[org]),
+    pool.query(`SELECT u.id,u.email FROM users u JOIN memberships m ON m.user_id=u.id
+     WHERE m.organization_id=$1 AND m.role='DRIVER' AND u.active=true ORDER BY u.email LIMIT 200`,[org]),
     pool.query('SELECT id,label,zone_code,start_minute,end_minute FROM delivery_slots WHERE active=true ORDER BY start_minute LIMIT 100')
    ]);
    options.drivers=drivers.rows;options.slots=slots.rows;
@@ -383,13 +383,13 @@ export function createOperationsRoutes(pool:Pool){
   if(allowed('delivery:assign')||allowed('delivery:read')||allowed('delivery:assigned')){
    const driverOnly=!allowed('delivery:read');
    const [runs,stops]=await Promise.all([
-    pool.query(\`SELECT dr.id,dr.driver_id,u.email AS driver_email,dr.slot_id,ds.label AS slot_label,
+    pool.query(`SELECT dr.id,dr.driver_id,u.email AS driver_email,dr.slot_id,ds.label AS slot_label,
       dr.delivery_date::text AS delivery_date,dr.status
      FROM delivery_runs dr JOIN delivery_slots ds ON ds.id=dr.slot_id
       JOIN users u ON u.id=dr.driver_id
      WHERE dr.producer_organization_id=$1 AND ($2::boolean=false OR dr.driver_id=$3)
-     ORDER BY dr.delivery_date DESC,ds.start_minute LIMIT 200\`,[org,driverOnly,c.get('userId')]),
-    pool.query(\`SELECT st.id,st.run_id,st.order_id,st.stop_number,st.status,dr.driver_id,
+     ORDER BY dr.delivery_date DESC,ds.start_minute LIMIT 200`,[org,driverOnly,c.get('userId')]),
+    pool.query(`SELECT st.id,st.run_id,st.order_id,st.stop_number,st.status,dr.driver_id,
       dr.delivery_date::text AS delivery_date,dr.slot_id,ds.label AS slot_label,
       k.name AS kitchen,orgc.name AS customer
      FROM delivery_stops st JOIN delivery_runs dr ON dr.id=st.run_id
@@ -397,7 +397,7 @@ export function createOperationsRoutes(pool:Pool){
       JOIN orders o ON o.id=st.order_id JOIN kitchens k ON k.id=o.kitchen_id
       JOIN organizations orgc ON orgc.id=o.organization_id
      WHERE dr.producer_organization_id=$1 AND ($2::boolean=false OR dr.driver_id=$3)
-     ORDER BY dr.delivery_date DESC,st.stop_number LIMIT 300\`,[org,driverOnly,c.get('userId')])
+     ORDER BY dr.delivery_date DESC,st.stop_number LIMIT 300`,[org,driverOnly,c.get('userId')])
    ]);
    options.runs=runs.rows;options.stops=stops.rows;
   }

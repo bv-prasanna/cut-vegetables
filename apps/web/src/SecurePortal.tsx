@@ -203,7 +203,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <td>{r.required_grams==null?'—':(Number(r.required_grams)/1000).toFixed(2)+' kg'}
  {r.order_count!=null?' · '+r.order_count+' orders':''}</td></tr>)}</tbody></table></div>{tasks.length===0&&<div className="fp-emptystate"><span aria-hidden="true">◷</span><strong>{boardBusy?'Loading current work queue…':'No records for this role and delivery date'}</strong><p>{boardBusy?'Fetching the latest records.':'Choose another date or use Refresh board. Access is limited to your organisation.'}</p></div>}</section>}
 
- {session&&profile&&currentBoard&&<SecureOperations base={BASE} token={session.accessToken} tab={tab} roles={profile.roles} date={boardDate} onChanged={()=>setBoardRefresh(n=>n+1)} onSessionExpired={()=>void logout()}/>}
+ {session&&profile&&currentBoard&&<SecureOperations base={BASE} token={session.accessToken} tab={tab as "Procurement"|"Cutting"|"Quality"|"Packing"|"Delivery"} roles={profile.roles} date={boardDate} onChanged={()=>setBoardRefresh(n=>n+1)} onSessionExpired={()=>void logout()}/>}
  </main></div></div>}
  </div>;
 }
