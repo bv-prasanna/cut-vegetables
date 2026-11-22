@@ -6,6 +6,7 @@ import {localDate,cutoffInstant} from './scheduling.js';
 import {BusinessFailure,inTransaction,recordEvent,systemEvent,respondError} from './ops-db.js';
 import {geoEventSchema} from './geo-events.js';
 import {recurrenceRunsOn} from './scheduling.js';
+import {loadContractPricing} from './commercial-pricing.js';
 type Env={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const uuid=z.string().uuid();
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{try{localDate(v);return true;}catch{return false;}});
@@ -27,7 +28,7 @@ type ScheduleRow={id:string;organization_id:string;kitchen_id:string;slot_id:str
 type Materialized={scheduleId:string;state:'CREATED'|'BLOCKED'|'SKIPPED'|'EXISTS'|'NOT_DUE';orderId?:string;reason?:string};
 type SlotRow={id:string;zone_code:string;label:string;start_minute:number;end_minute:number;
  cutoff_day_offset:number;cutoff_minute:number;capacity_orders:number;active:boolean};
-type VariantRow={variant_id:string;grams:number;price_paise_per_kg:number;minimum_grams:number;increment_grams:number;active:boolean};
+type VariantRow={variant_id:string;grams:number;minimum_grams:number;increment_grams:number;active:boolean};
 
 export function recurrenceIsDue(s:ScheduleRow,day:string):boolean{
  return recurrenceRunsOn({
@@ -80,22 +81,32 @@ export async function generateRecurrences(pool:Pool,deliveryDate:string,producer
    const cap=await tx.query<{n:number}>('SELECT count(*)::int AS n FROM slot_reservations WHERE slot_id=$1 AND delivery_date=$2::date',
     [s.slot_id,deliveryDate]);
    if(cap.rows[0].n>=slot.capacity_orders)return block('BLOCKED','Slot full');
-   const items=await tx.query<VariantRow>(`SELECT ri.variant_id,ri.grams,pv.price_paise_per_kg,pv.minimum_grams,
+   const items=await tx.query<VariantRow>(`SELECT ri.variant_id,ri.grams,pv.minimum_grams,
      pv.increment_grams,pv.active FROM recurring_items ri JOIN product_variants pv ON pv.id=ri.variant_id
      WHERE ri.schedule_id=$1 ORDER BY ri.variant_id`,[id]);
    if(!items.rowCount||items.rows.some(i=>!i.active||i.grams<i.minimum_grams||
      (i.grams-i.minimum_grams)%i.increment_grams!==0))return block('BLOCKED','Variant discontinued or invalid quantity');
+   const pricing=await loadContractPricing(tx,s.organization_id,producerOrganizationId,s.kitchen_id,deliveryDate,items.rows.map(i=>i.variant_id));
+   if(!pricing||pricing.rules.size!==items.rowCount)return block('BLOCKED','No active approved contract price for one or more variants');
+   if(items.rows.some(i=>{const rule=pricing.rules.get(i.variant_id);return !rule||i.grams<rule.minimum_grams||(i.grams-rule.minimum_grams)%rule.increment_grams!==0;}))
+    return block('BLOCKED','Contract quantity minimum or increment changed');
+   const subtotal=items.rows.reduce((sum,i)=>sum+Math.round(pricing.rules.get(i.variant_id)!.price_paise_per_kg*i.grams/1000),0);
+   if(subtotal<Number(pricing.contract.minimum_order_value_paise))return block('BLOCKED','Contract minimum order value not met');
+   const deliveryFee=Number(pricing.contract.delivery_fee_paise),total=subtotal+deliveryFee;
+   const pricingSnapshot={contractId:pricing.contract.id,contractVersion:pricing.contract.version,subtotalPaise:subtotal,deliveryFeePaise:deliveryFee,totalPaise:total,currency:'INR'};
    const order=await tx.query<{id:string}>(`INSERT INTO orders
-    (organization_id,kitchen_id,slot_id,delivery_date,source_schedule_id,producer_organization_id,idempotency_key)
-    VALUES($1,$2,$3,$4::date,$5,$6,$7) RETURNING id`,[
+    (organization_id,kitchen_id,slot_id,delivery_date,source_schedule_id,producer_organization_id,idempotency_key,contract_id,contract_version,subtotal_paise,delivery_fee_paise,total_paise,pricing_snapshot)
+    VALUES($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb) RETURNING id`,[
      s.organization_id,s.kitchen_id,s.slot_id,deliveryDate,id,producerOrganizationId,
-     'schedule:'+id+':'+deliveryDate
+     'schedule:'+id+':'+deliveryDate,pricing.contract.id,pricing.contract.version,subtotal,deliveryFee,total,JSON.stringify(pricingSnapshot)
     ]);
    const orderId=order.rows[0].id;
    for(const v of items.rows){
-    const amount=Math.round(v.price_paise_per_kg*v.grams/1000);
-    await tx.query(`INSERT INTO order_items(order_id,variant_id,grams,price_paise_per_kg,line_total_paise)
-     VALUES($1,$2,$3,$4,$5)`,[orderId,v.variant_id,v.grams,v.price_paise_per_kg,amount]);
+    const rule=pricing.rules.get(v.variant_id)!;
+    const amount=Math.round(rule.price_paise_per_kg*v.grams/1000);
+    const itemSnapshot={priceRuleId:rule.id,pricePaisePerKg:rule.price_paise_per_kg,minimumGrams:rule.minimum_grams,incrementGrams:rule.increment_grams,serviceDate:deliveryDate};
+    await tx.query(`INSERT INTO order_items(order_id,variant_id,grams,price_paise_per_kg,line_total_paise,contract_price_rule_id,pricing_snapshot)
+     VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)`,[orderId,v.variant_id,v.grams,rule.price_paise_per_kg,amount,rule.id,JSON.stringify(itemSnapshot)]);
    }
    await tx.query('INSERT INTO slot_reservations(slot_id,delivery_date,order_id) VALUES($1,$2::date,$3)',
     [s.slot_id,deliveryDate,orderId]);
@@ -141,7 +152,7 @@ export function createRecurrenceRoutes(pool:Pool,clock:()=>Date=()=>new Date()){
   if(!data.success)return c.json({error:'Invalid schedule',issues:data.error.flatten()},400);
   const v=data.data;
   const created=await inTransaction(pool,async tx=>{
-   const kitchen=await tx.query<{zone_code:string}>(`SELECT zone_code FROM kitchens WHERE id=$1 AND organization_id=$2 AND active=true`,
+   const kitchen=await tx.query<{zone_code:string;producer_organization_id:string|null}>(`SELECT zone_code,producer_organization_id FROM kitchens WHERE id=$1 AND organization_id=$2 AND active=true`,
     [v.kitchenId,c.get('organizationId')]);
    if(!kitchen.rowCount)throw new BusinessFailure(422,'Kitchen unavailable');
    const slot=await tx.query<{zone_code:string;active:boolean}>('SELECT zone_code,active FROM delivery_slots WHERE id=$1',[v.slotId]);
@@ -154,6 +165,11 @@ export function createRecurrenceRoutes(pool:Pool,clock:()=>Date=()=>new Date()){
    if(product.size!==ids.length||v.items.some(i=>{
     const p=product.get(i.variantId);return !p||i.grams<p.minimum_grams||(i.grams-p.minimum_grams)%p.increment_grams!==0;
    }))throw new BusinessFailure(422,'Invalid variant or quantity');
+   if(!kitchen.rows[0].producer_organization_id)throw new BusinessFailure(422,'Kitchen supplier is not configured');
+   const pricing=await loadContractPricing(tx,c.get('organizationId'),kitchen.rows[0].producer_organization_id,v.kitchenId,v.startDate,ids);
+   if(!pricing||pricing.rules.size!==ids.length)throw new BusinessFailure(409,'An active approved contract price is required for every scheduled product');
+   if(v.items.some(i=>{const rule=pricing.rules.get(i.variantId);return !rule||i.grams<rule.minimum_grams||(i.grams-rule.minimum_grams)%rule.increment_grams!==0;}))
+    throw new BusinessFailure(422,'One or more products do not meet contracted quantity rules');
    const schedule=await tx.query<{id:string}>(`INSERT INTO recurring_schedules(
     organization_id,kitchen_id,slot_id,frequency,weekdays,start_date,end_date)
     VALUES($1,$2,$3,$4,$5,$6::date,$7::date) RETURNING id`,[
