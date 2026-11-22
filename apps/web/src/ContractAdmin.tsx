@@ -4,11 +4,13 @@ type BuyerKitchen={organization_id:string;organization_name:string;kitchen_id:st
 type Variant={id:string;sku:string;vegetable:string;method_code:string;size_kind:string;size_number:string|null;size_unit:string|null;size_label:string|null;minimum_grams:number;increment_grams:number};
 type Contract={id:string;contract_code:string;name:string;buyer_organization_id:string;buyer_name:string;kitchen_id:string|null;kitchen:string|null;status:string;valid_from:string;valid_to:string|null;minimum_order_value_paise:number;delivery_fee_paise:number;credit_limit_paise:number|null;payment_terms_days:number};
 type PriceRule={id:string;variant_id:string;sku:string;vegetable:string;method_code:string;size_kind:string;size_number:string|null;size_unit:string|null;size_label:string|null;kitchen_id:string|null;price_paise_per_kg:number;minimum_grams:number;increment_grams:number;effective_from:string;effective_to:string|null;status:string;version:number};
+type QuoteRequest={id:string;quote_number:number|string;buyer_name:string;kitchen:string;delivery_date:string;state:string;valid_until:string;subtotal_paise:number|string;delivery_fee_paise:number|string;discount_paise:number|string;total_paise:number|string;note:string|null};
 type Props={base:string;token:string;canManage:boolean;onSessionExpired:()=>void};
 const today=()=>{const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const v=Object.fromEntries(p.map(x=>[x.type,x.value]));return v.year+'-'+v.month+'-'+v.day;};
 const money=(paise:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(Number(paise||0)/100);
 export default function ContractAdmin({base,token,canManage,onSessionExpired}:Props){
- const [buyers,setBuyers]=useState<BuyerKitchen[]>([]),[variants,setVariants]=useState<Variant[]>([]),[contracts,setContracts]=useState<Contract[]>([]),[rules,setRules]=useState<PriceRule[]>([]);
+ const [buyers,setBuyers]=useState<BuyerKitchen[]>([]),[variants,setVariants]=useState<Variant[]>([]),[contracts,setContracts]=useState<Contract[]>([]),[rules,setRules]=useState<PriceRule[]>([]),[quotes,setQuotes]=useState<QuoteRequest[]>([]);
+ const [quoteDiscount,setQuoteDiscount]=useState('0');
  const [selectedBuyer,setSelectedBuyer]=useState(''),[selectedContract,setSelectedContract]=useState('');
  const [code,setCode]=useState(''),[name,setName]=useState(''),[validFrom,setValidFrom]=useState(today()),[validTo,setValidTo]=useState('');
  const [minimumOrder,setMinimumOrder]=useState('0'),[deliveryFee,setDeliveryFee]=useState('0'),[creditLimit,setCreditLimit]=useState(''),[paymentDays,setPaymentDays]=useState('0');
@@ -21,12 +23,13 @@ export default function ContractAdmin({base,token,canManage,onSessionExpired}:Pr
  const load=useCallback(async()=>{
   setLoading(true);setError('');
   try{
-   const [b,v,c]=await Promise.all([
+   const [b,v,c,q]=await Promise.all([
     call<BuyerKitchen[]>('/v1/admin/contracts/customers'),
     call<Variant[]>('/v1/admin/variants'),
-    call<Contract[]>('/v1/admin/contracts')
+    call<Contract[]>('/v1/admin/contracts'),
+    call<QuoteRequest[]>('/v1/admin/quotes')
    ]);
-   setBuyers(b);setVariants(v);setContracts(c);
+   setBuyers(b);setVariants(v);setContracts(c);setQuotes(q);
    setSelectedBuyer(old=>b.some(x=>x.kitchen_id===old)?old:b[0]?.kitchen_id||'');
    setSelectedContract(old=>c.some(x=>x.id===old)?old:c[0]?.id||'');
   }catch(e){setError(e instanceof Error?e.message:'Unable to load contract workspace');}
@@ -76,6 +79,15 @@ export default function ContractAdmin({base,token,canManage,onSessionExpired}:Pr
   catch(e){setError(e instanceof Error?e.message:'Unable to approve price');}
   finally{setBusy(false);}
  }
+ async function proposeQuote(q:QuoteRequest){
+  setBusy(true);setError('');setNotice('');
+  try{
+   const discount=canManage?Math.round(Number(quoteDiscount)*100):0;
+   await call('/v1/admin/quotes/'+q.id+'/propose','POST',{discountPaise:discount,validHours:48,note:'FreshPrep commercial proposal'});
+   setNotice('Quote #'+q.quote_number+' proposal sent to the customer.');setQuoteDiscount('0');await load();
+  }catch(e){setError(e instanceof Error?e.message:'Unable to send quote proposal');}
+  finally{setBusy(false);}
+ }
  async function activate(){
   setBusy(true);setError('');setNotice('');
   try{await call('/v1/admin/contracts/'+selectedContract+'/status','PATCH',{status:'ACTIVE'});setNotice('Contract activated. The customer catalogue now uses these approved prices.');await load();}
@@ -112,5 +124,8 @@ export default function ContractAdmin({base,token,canManage,onSessionExpired}:Pr
    <label>Effective to<input type="date" value={priceTo} onChange={e=>setPriceTo(e.target.value)}/></label>
    <button type="submit" disabled={busy||!variantId||price===''||Number(price)<0}>Save price rule</button>
   </form></section>}
+  <section className="fp-secure-card fp-quote-queue"><div className="fp-ops-heading"><div><h3>Buyer quote requests</h3><p>Review customer requests and send a time-limited proposal. Sales can send the contracted amount; managers may approve a discount.</p></div><span>{quotes.length} quotes</span></div>
+   {quotes.length?quotes.map(q=><article key={q.id}><div><strong>Quote #{q.quote_number} · {q.buyer_name} · {q.kitchen}</strong><span>{q.delivery_date} · {q.state}</span><small>Subtotal {money(Number(q.subtotal_paise))} · Delivery {money(Number(q.delivery_fee_paise))} · Total {money(Number(q.total_paise))}</small>{q.note&&<small>{q.note}</small>}</div>{q.state==='REQUESTED'&&<div className="fp-quote-actions">{canManage&&<label>Discount (₹)<input type="number" min="0" step="0.01" value={quoteDiscount} onChange={e=>setQuoteDiscount(e.target.value)}/></label>}<button type="button" disabled={busy||Number(quoteDiscount)<0} onClick={()=>void proposeQuote(q)}>Send proposal</button></div>}</article>):<p>No buyer quote requests are waiting.</p>}
+  </section>
  </section>;
 }
