@@ -1,4 +1,4 @@
-import React,{useCallback,useEffect,useMemo,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {apiRequest,FriendlyApiError} from './api-errors';
 
 type Tab='Procurement'|'Cutting'|'Quality'|'Packing'|'Delivery';
@@ -54,6 +54,8 @@ function ActionCard({title,description,children}:{title:string;description:strin
 }
 export default function SecureOperations({base,token,tab,roles,date,onChanged,onSessionExpired}:Props){
  const [options,setOptions]=useState<ActionOptions>(empty);
+ const sessionExpired=useRef(onSessionExpired);
+ useEffect(()=>{sessionExpired.current=onSessionExpired;},[onSessionExpired]);
  const [loading,setLoading]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [supplierName,setSupplierName]=useState(''),[supplierId,setSupplierId]=useState('');
  const [purchaseId,setPurchaseId]=useState(''),[vegetableId,setVegetableId]=useState('');
@@ -69,10 +71,10 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
    const result=await apiRequest<ActionOptions>(base,'/v1/ops/action-options',{token});
    setOptions({...empty,...result});
   }catch(e){
-   if(e instanceof FriendlyApiError&&e.status===401)onSessionExpired();
+   if(e instanceof FriendlyApiError&&e.status===401)sessionExpired.current();
    setError(e instanceof Error?e.message:'Unable to load operational action choices');
   }finally{setLoading(false);}
- },[base,token,onSessionExpired]);
+ },[base,token]);
  useEffect(()=>{void load();},[load,tab,date]);
  const selectedOrder=options.orders.find(o=>o.id===orderId);
  const selectedVariant=selectedOrder?.items.find(i=>i.variantId===variantId);
