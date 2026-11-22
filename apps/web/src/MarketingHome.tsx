@@ -26,6 +26,8 @@ type Props = {
   onSelectProduct: (v: StoreVariant) => void;
 };
 
+const PUBLIC_API_BASE=(import.meta.env.VITE_API_BASE_URL||'/api').replace(/\\/$/,'');
+
 const HERO_FALLBACK: Slide[] = [
  {id:'h1',eyebrow:'READY FOR GREAT KITCHENS',headline:'Freshly Cut.\nHygienically Packed.\nDelivered On Time.',description:'Precision-prepared vegetables for restaurants, hotels, PG kitchens, caterers and wedding halls.',imageUrl:'https://images.unsplash.com/photo-1543362906-acfc16c67564?auto=format&fit=crop&w=1800&q=85',active:true,sortOrder:0},
  {id:'h2',eyebrow:'YOUR PREP PARTNER',headline:'The Right Cut.\nFor Every Recipe.',description:'Choose the vegetable, cutting style, exact dimension and weight that works for your kitchen.',imageUrl:'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1800&q=85',active:true,sortOrder:1},
@@ -91,10 +93,10 @@ export default function MarketingHome({variants,slots,weekdays,onSetWeekdays,fre
  const [notice,setNotice]=useState<string|null>(null);
  useEffect(()=>{
   let cancelled=false;
-  fetch('/api/home/slides').then(r=>r.ok?r.json():[]).then((items:Slide[])=>{
+  fetch(PUBLIC_API_BASE+'/home/slides').then(r=>r.ok?r.json():[]).then((items:Slide[])=>{
    if(!cancelled&&Array.isArray(items)&&items.length){const valid=items.filter(i=>i.active&&i.imageUrl&&i.headline).sort((a,b)=>a.sortOrder-b.sortOrder);if(valid.length){setSlides(valid);setActive(0);}}
   }).catch(()=>{});
-  fetch('/api/home/announcements').then(r=>r.ok?r.json():[]).then((items:{title:string;body:string}[])=>{if(!cancelled&&items.length)setNotice(items[0].title+': '+items[0].body);}).catch(()=>{});
+  fetch(PUBLIC_API_BASE+'/home/announcements').then(r=>r.ok?r.json():[]).then((items:{title:string;body:string}[])=>{if(!cancelled&&items.length)setNotice(items[0].title+': '+items[0].body);}).catch(()=>{});
   return()=>{cancelled=true;};
  },[]);
  const hero=slides[Math.min(active,slides.length-1)]||HERO_FALLBACK[0];

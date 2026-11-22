@@ -261,6 +261,8 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    targetUrl:'https://example.invalid/catalogue',ctaLabel:'Browse catalogue',
    sortOrder:1,startsAt,endsAt,active:true,audience:'ALL'
   };
+  expect((await request('/v1/admin/marketing/slides','POST',{...slide,imageUrl:'http://insecure.example/hero.jpg'})).status).toBe(400);
+  expect((await request('/v1/admin/marketing/slides','POST',{...slide,endsAt:startsAt})).status).toBe(400);
   const created=await request('/v1/admin/marketing/slides','POST',slide);
   expect(created.status).toBe(201);
   const slideId=(await created.json() as {id:string}).id;

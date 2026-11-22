@@ -46,7 +46,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
    const preferred=me.roles.some(r=>['CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER'].includes(r))?'Supply':
     me.roles.includes('PROCUREMENT')||me.roles.includes('STORE')?'Procurement':
     me.roles.includes('QC')?'Quality':me.roles.includes('OPERATOR')||me.roles.includes('PRODUCTION_SUPERVISOR')?'Cutting':
-    me.roles.includes('PACKER')?'Packing':me.roles.includes('DRIVER')||me.roles.includes('DISPATCH')?'Delivery':'Overview';
+    me.roles.includes('PACKER')?'Packing':me.roles.includes('DRIVER')||me.roles.includes('DISPATCH')?'Delivery':me.roles.includes('MARKETING')?'Marketing':'Overview';
    setTab(preferred);
    setMessage('Signed in. JWT expires after '+Math.round(result.expiresInSeconds/60)+' minutes.');
    if(me.roles.includes('SUPERADMIN')||me.roles.includes('ADMIN')){
@@ -136,7 +136,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
    setOrgName('');setContactEmail('');setContactPassword('');setKitchenName('');setAddress('');
   },'Customer organisation and first kitchen created.');
  }
- const hasWorkspaces=canCustomer||canAdmin||canProcure||canCut||canQC||canPack||canDeliver;
+ const hasWorkspaces=canCustomer||canAdmin||canProcure||canCut||canQC||canPack||canDeliver||canMarketing;
  const availableTabs=[...(canCustomer?['Supply']:[]),...(canAdmin?['Overview','Staff','Customers','Catalogue','Slots']:!hasWorkspaces?['Overview']:[]),...(canProcure?['Procurement']:[]),...(canCut?['Cutting']:[]),...(canQC?['Quality']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[]),...(canMarketing?['Marketing']:[])] as (typeof tab)[];
  return <div className="fp-secure">
  <header className="fp-secure-header"><button type="button" onClick={onHome} className="fp-secure-brand" aria-label="FreshPrep home">❧ FreshPrep <small>Veggies</small></button><div><span>SECURE BUSINESS PORTAL</span>{session&&<span className="fp-secure-account">{email}</span>}</div></header>
@@ -152,7 +152,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <div className="fp-secure-intro"><div><span>FRESHPREP  /  TEAM WORKSPACE  /  {profile?.organizationId.slice(0,8)}</span><h1>{tab==='Supply'?'Your kitchen, always prepared':tab==='Overview'?'Business overview':tab==='Procurement'?'Procurement & inventory':tab==='Cutting'?'Production planning':tab==='Quality'?'Quality assurance':tab==='Packing'?'Packing operations':tab==='Delivery'?'Delivery control':tab==='Marketing'?'Marketing & announcements':tab==='Staff'?'Team management':tab==='Customers'?'Customer network':tab==='Catalogue'?'Product catalogue':'Delivery configuration'}</h1><p>Your authorised workspace · {profile?.roles.join(' · ')}</p></div><div className="fp-secure-intro-actions"><span className="fp-secure-session-note">Protected session · signed-in organisation</span><button type="button" onClick={()=>void logout()}>Sign out</button></div></div>
  {error&&<p role="alert" className="fp-error">{error}</p>}{message&&<p role="status" className="fp-notice">{message}</p>}
  <div className="fp-secure-layout"><nav className="fp-secure-tabs" aria-label="Workspace navigation"><p className="fp-secure-nav-caption">WORKSPACES</p>{availableTabs.map(t=><button type="button" key={t} aria-current={tab===t?'page':undefined} className={tab===t?'active':''} onClick={()=>void openTab(t)}><span className="fp-secure-nav-icon" aria-hidden="true">{({Overview:'▦',Supply:'▤',Staff:'♧',Customers:'▣',Catalogue:'◈',Slots:'◷',Procurement:'▧',Cutting:'▥',Quality:'◆',Packing:'▨',Delivery:'↗',Marketing:'✦'} as Record<string,string>)[t]}</span>{t}</button>)}<div className="fp-secure-nav-footer"><strong>FreshPrep operations</strong><span>Roles are verified with every request.</span></div></nav><main className="fp-secure-main" id="workspace-content">
- {tab==='Marketing'&&session&&<SecureMarketingAdmin base={BASE} token={session.accessToken}/>}
+ {tab==='Marketing'&&session&&<SecureMarketingAdmin base={BASE} token={session.accessToken} onSessionExpired={()=>void logout()}/>}
  {tab==='Supply'&&session&&profile&&<CustomerOrderPortal token={session.accessToken} base={BASE} roles={profile.roles} onLogout={()=>void logout()}/>}
  {(tab==='Catalogue'||tab==='Slots')&&session&&<CatalogAdmin base={BASE} token={session.accessToken} superadmin={profile?.roles.includes('SUPERADMIN')??false} mode={tab}/>}
  {tab==='Overview'&&<section className="fp-secure-panels" aria-label="Business key metrics">

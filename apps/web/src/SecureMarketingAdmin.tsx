@@ -2,11 +2,11 @@ import React,{useCallback,useEffect,useState} from 'react';
 import {apiRequest,FriendlyApiError} from './api-errors';
 type Slide={id:string;eyebrow:string;headline:string;description:string;imageUrl:string;mobileImageUrl?:string;altText:string;targetUrl?:string;ctaLabel?:string;sortOrder:number;startsAt:string;endsAt:string;active:boolean;audience:string};
 type Announcement={id:string;title:string;body:string;startsAt:string;endsAt:string;active:boolean;priority:number;urgency:'INFO'|'IMPORTANT'|'CRITICAL';audience:string};
-type Props={base:string;token:string};
+type Props={base:string;token:string;onSessionExpired?:()=>void};
 const localInput=(value:Date)=>new Date(value.getTime()-value.getTimezoneOffset()*60000).toISOString().slice(0,16);
 const defaultStart=()=>localInput(new Date());
 const defaultEnd=()=>localInput(new Date(Date.now()+30*86400000));
-export default function SecureMarketingAdmin({base,token}:Props){
+export default function SecureMarketingAdmin({base,token,onSessionExpired}:Props){
  const [slides,setSlides]=useState<Slide[]>([]),[announcements,setAnnouncements]=useState<Announcement[]>([]);
  const [headline,setHeadline]=useState('Freshly cut. Ready for great kitchens.'),[eyebrow,setEyebrow]=useState('READY FOR GREAT KITCHENS');
  const [description,setDescription]=useState('Precision-prepared vegetables for professional kitchens.'),[imageUrl,setImageUrl]=useState('');
@@ -29,7 +29,7 @@ export default function SecureMarketingAdmin({base,token}:Props){
   setBusy(true);setError('');setMessage('');
   try{await task();setMessage(success);await load();}
   catch(e){
-   if(e instanceof FriendlyApiError&&e.status===401)setError('Your session expired. Sign in again to continue.');
+   if(e instanceof FriendlyApiError&&e.status===401){setError('Your session expired. Sign in again to continue.');onSessionExpired?.();}
    else setError(e instanceof Error?e.message:'Marketing change could not be saved.');
   }finally{setBusy(false);}
  }
