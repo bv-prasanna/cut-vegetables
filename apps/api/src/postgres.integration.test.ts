@@ -227,6 +227,27 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    "SELECT count(*)::text AS count FROM event_log WHERE organization_id=$1 AND event_type='DELIVERY_POD_CAPTURED'",[producerOrg]);
   expect(Number(audit.rows[0].count)).toBe(1);
  });
+
+ it('exposes permission-scoped action selectors and keeps driver data assigned-only',async()=>{
+  const adminOptions=await request('/v1/ops/action-options');
+  expect(adminOptions.status).toBe(200);
+  const adminData=await adminOptions.json() as {suppliers:unknown[];purchases:unknown[];vegetables:unknown[];variants:unknown[];rawLots:unknown[];orders:{id:string}[];batches:unknown[];drivers:unknown[];runs:unknown[];stops:{id:string}[]};
+  expect(adminData.suppliers.length).toBeGreaterThan(0);
+  expect(adminData.purchases.length).toBeGreaterThan(0);
+  expect(adminData.vegetables.length).toBeGreaterThan(0);
+  expect(adminData.variants.length).toBeGreaterThanOrEqual(100);
+  expect(adminData.rawLots.length).toBeGreaterThan(0);
+  expect(adminData.orders.some(o=>o.id===orderId)).toBe(true);
+  expect(adminData.batches.length).toBeGreaterThan(0);
+  expect(adminData.drivers.length).toBeGreaterThan(0);
+  expect(adminData.runs.length).toBeGreaterThan(0);
+  expect(adminData.stops.length).toBeGreaterThan(0);
+  const customerOptions=await request('/v1/ops/action-options','GET',undefined,customerToken);
+  expect(customerOptions.status).toBe(200);
+  const customerData=await customerOptions.json() as {suppliers:unknown[];purchases:unknown[];vegetables:unknown[];variants:unknown[];rawLots:unknown[];orders:unknown[];batches:unknown[];drivers:unknown[];runs:unknown[];stops:unknown[]};
+  expect(Object.values(customerData).every(rows=>rows.length===0)).toBe(true);
+ });
+
  it('shows only scoped live admin insights and never grants a customer report access',async()=>{
   const staff=await request('/v1/admin/insights');
   expect(staff.status).toBe(200);

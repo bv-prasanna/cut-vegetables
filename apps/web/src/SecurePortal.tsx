@@ -3,6 +3,7 @@ import './secure-portal.css';
 import CustomerOrderPortal from './CustomerOrderPortal';
 import CatalogAdmin from './CatalogAdmin';
 import AdminInsights from './AdminInsights';
+import SecureOperations from './SecureOperations';
 import {apiRequest,FriendlyApiError} from './api-errors';
 type Session={accessToken:string;tokenType:string;expiresInSeconds:number};
 type Profile={userId:string;organizationId:string;roles:string[]};
@@ -31,7 +32,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  const canCustomer=profile?.roles.some(r=>['CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER'].includes(r))??false;
  const canProcure=profile?.roles.some(r=>['SUPERADMIN','PROCUREMENT','STORE'].includes(r))??false;
  const canQC=profile?.roles.some(r=>['SUPERADMIN','QC','PRODUCTION_SUPERVISOR'].includes(r))??false;
- const canCut=profile?.roles.some(r=>['SUPERADMIN','ADMIN','OPERATOR','PRODUCTION_SUPERVISOR','STORE'].includes(r))??false;
+ const canCut=profile?.roles.some(r=>['SUPERADMIN','OPERATOR','PRODUCTION_SUPERVISOR','STORE'].includes(r))??false;
  const canPack=profile?.roles.some(r=>['SUPERADMIN','PACKER'].includes(r))??false;
  const canDeliver=profile?.roles.some(r=>['SUPERADMIN','DISPATCH','DRIVER'].includes(r))??false;
  async function login(e:React.FormEvent){
@@ -201,6 +202,8 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <td>{r.preparation||r.state||'—'} {r.size||''}</td>
  <td>{r.required_grams==null?'—':(Number(r.required_grams)/1000).toFixed(2)+' kg'}
  {r.order_count!=null?' · '+r.order_count+' orders':''}</td></tr>)}</tbody></table></div>{tasks.length===0&&<div className="fp-emptystate"><span aria-hidden="true">◷</span><strong>{boardBusy?'Loading current work queue…':'No records for this role and delivery date'}</strong><p>{boardBusy?'Fetching the latest records.':'Choose another date or use Refresh board. Access is limited to your organisation.'}</p></div>}</section>}
+
+ {session&&profile&&currentBoard&&<SecureOperations base={BASE} token={session.accessToken} tab={tab} roles={profile.roles} date={boardDate} onChanged={()=>setBoardRefresh(n=>n+1)} onSessionExpired={()=>void logout()}/>}
  </main></div></div>}
  </div>;
 }
