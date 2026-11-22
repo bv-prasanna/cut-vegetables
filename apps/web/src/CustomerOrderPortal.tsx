@@ -8,8 +8,9 @@ type Slot={id:string;zone_code:string;label:string;start_minute:number;
  cutoff_day_offset:number;cutoff_minute:number;capacity_orders:number};
 type Product={id:string;vegetable:string;preparation:string;sku:string;
  size_kind:string;size_number:string|null;size_unit:string|null;size_label:string|null;
- price_paise_per_kg:number;minimum_grams:number;increment_grams:number;image_url:string};
+ price_paise_per_kg:number;minimum_grams:number;increment_grams:number;image_url:string;delivery_fee_paise?:number};
 type Order={id:string;kitchen_id:string;slot_id:string;delivery_date:string;state:string;created_at:string};
+type Quote={id:string;quote_number:number|string;state:string;delivery_date:string;valid_until:string;subtotal_paise:number|string;delivery_fee_paise:number|string;discount_paise:number|string;total_paise:number|string;note:string|null;accepted_order_id:string|null};
 type Schedule={id:string;kitchen_id:string;slot_id:string;frequency:string;weekdays:number[];start_date:string;end_date:string|null;state:string};
 type Props={token:string;base:string;roles:string[];onLogout:()=>void};
 const money=(p:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(p/100);
@@ -36,8 +37,9 @@ function ProductPhoto({item}:{item:Product}){
 }
 export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const canWrite=roles.includes('SUPERADMIN')||roles.includes('CUSTOMER_BUYER')||roles.includes('CUSTOMER_ADMIN');
+ const canRequestQuote=canWrite;
  const [products,setProducts]=useState<Product[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]),[slots,setSlots]=useState<Slot[]>([]);
- const [orders,setOrders]=useState<Order[]>([]),[schedules,setSchedules]=useState<Schedule[]>([]);
+ const [orders,setOrders]=useState<Order[]>([]),[schedules,setSchedules]=useState<Schedule[]>([]),[quotes,setQuotes]=useState<Quote[]>([]);
  const [view,setView]=useState<'Order'|'Recurring'|'History'>('Order');
  const [search,setSearch]=useState(''),[basket,setBasket]=useState<Record<string,number>>({});
  const [kitchen,setKitchen]=useState(''),[slot,setSlot]=useState(''),[date,setDate]=useState(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}));
@@ -116,7 +118,39 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
   }catch(e){setError(e instanceof Error?e.message:'Unable to save');}
   finally{setBusy(false);}
  }
- async function setScheduleState(s:Schedule,state:'ACTIVE'|'PAUSED'|'CANCELLED'){
+   async function requestQuote(){
+   if(!canRequestQuote)return;
+   if(!kitchen||!slot||!selected.length){setError('Choose your kitchen, delivery slot and at least one product before requesting a quote.');return;}
+   if(!suitable.some(s=>s.id===slot)){setError('Delivery slot does not serve selected kitchen.');return;}
+   setBusy(true);setError('');setStatus('');
+   try{
+    const fingerprint=JSON.stringify({kitchen,slot,date,items:[...selected].sort((a,b)=>a.variantId.localeCompare(b.variantId))});
+    if(!pendingQuoteRef.current||pendingQuoteRef.current.fingerprint!==fingerprint)pendingQuoteRef.current={fingerprint,key:crypto.randomUUID()};
+    const saved=await call<{id:string;quoteNumber:number|string;replayed?:boolean}>('/v1/quotes','POST',{
+     kitchenId:kitchen,slotId:slot,deliveryDate:date,idempotencyKey:pendingQuoteRef.current.key,items:selected
+    });
+    pendingQuoteRef.current=null;
+    setStatus((saved.replayed?'Existing quote request: ':'Quote request submitted: ')+'#'+saved.quoteNumber+'. FreshPrep will review it and send a proposal.');
+    setBasket({});await refresh();setView('History');
+   }catch(e){setError(e instanceof Error?e.message:'Unable to request a quote');}
+   finally{setBusy(false);}
+  }
+  async function acceptQuote(q:Quote){
+   setBusy(true);setError('');setStatus('');
+   try{
+    const result=await call<{id:string;replayed:boolean}>('/v1/quotes/'+q.id+'/accept','POST',{});
+    setStatus((result.replayed?'Previously accepted quote. ':'Quote accepted; order created: ')+result.id);
+    await refresh();
+   }catch(e){setError(e instanceof Error?e.message:'Unable to accept quote');}
+   finally{setBusy(false);}
+  }
+  async function rejectQuote(q:Quote){
+   setBusy(true);setError('');setStatus('');
+   try{await call('/v1/quotes/'+q.id+'/reject','POST',{});setStatus('Quote #'+q.quote_number+' declined.');await refresh();}
+   catch(e){setError(e instanceof Error?e.message:'Unable to decline quote');}
+   finally{setBusy(false);}
+  }
+async function setScheduleState(s:Schedule,state:'ACTIVE'|'PAUSED'|'CANCELLED'){
   setBusy(true);setError('');
   try{
    await call('/v1/recurrences/'+s.id,'PATCH',{state});
@@ -137,15 +171,16 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  <nav className="fp-customer-tabs"><button className={view==='Order'?'active':''} onClick={()=>setView('Order')}>One-time order</button><button className={view==='Recurring'?'active':''} onClick={()=>setView('Recurring')}>Recurring supply</button><button className={view==='History'?'active':''} onClick={()=>setView('History')}>Orders & schedules</button></nav>
  {!canWrite&&<p className="fp-customer-info">Your role permits viewing orders but not creating or changing them.</p>}
  {view==='History'?<div className="fp-customer-history"><section><h3>Recent orders</h3>{orders.length?orders.map(o=><article key={o.id}><b>{o.id.slice(0,12)}</b><span>{o.delivery_date}</span><span>{o.state}</span></article>):<p>No orders yet.</p>}</section>
- <section><h3>Recurring schedules</h3>{schedules.length?schedules.map(s=><article key={s.id}><div><b>{s.frequency} · {s.state}</b><p>{s.start_date}{s.end_date?' – '+s.end_date:''}</p><small>{s.id}</small></div>{canWrite&&<div className="fp-customer-actions"><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,s.state==='ACTIVE'?'PAUSED':'ACTIVE')}>{s.state==='ACTIVE'?'Pause':'Resume'}</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void skipDate(s)}>Skip selected date</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,'CANCELLED')}>Cancel</button></div>}</article>):<p>No recurring schedules.</p>}</section></div>:
+ <section><h3>Recurring schedules</h3>{schedules.length?schedules.map(s=><article key={s.id}><div><b>{s.frequency} · {s.state}</b><p>{s.start_date}{s.end_date?' – '+s.end_date:''}</p><small>{s.id}</small></div>{canWrite&&<div className="fp-customer-actions"><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,s.state==='ACTIVE'?'PAUSED':'ACTIVE')}>{s.state==='ACTIVE'?'Pause':'Resume'}</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void skipDate(s)}>Skip selected date</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,'CANCELLED')}>Cancel</button></div>}</article>):<p>No recurring schedules.</p>}</section><section className="fp-customer-quotes"><h3>Quote requests</h3>{quotes.length?quotes.map(q=><article key={q.id}><div><b>Quote #{q.quote_number} · {q.state}</b><p>Delivery {q.delivery_date} · Total {money(Number(q.total_paise))}</p>{q.note&&<small>{q.note}</small>}{q.valid_until&&<small>Valid until {new Date(q.valid_until).toLocaleString('en-IN')}</small>}{q.accepted_order_id&&<small>Order {q.accepted_order_id.slice(0,12)}</small>}</div>{q.state==='PROPOSED'&&canWrite&&<div className="fp-customer-actions"><button disabled={busy} onClick={()=>void acceptQuote(q)}>Accept quote</button><button disabled={busy} onClick={()=>void rejectQuote(q)}>Decline</button></div>}</article>):<p>No quote requests yet.</p>}</section></div>:
  <div className="fp-customer-order"><section className="fp-customer-products"><div className="fp-customer-filter"><div><h3>Prepared vegetables</h3><p>{visible.length} fresh-cut options · prices shown per kilogram</p></div><input type="search" aria-label="Search the catalogue" placeholder="Search vegetable, cut or size…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
  <div className="fp-customer-grid">{visible.map(p=><article key={p.id}><ProductPhoto item={p}/><div className="fp-product-info"><strong>{p.vegetable}</strong><small>{p.preparation.toLowerCase()} · {p.size_kind==='numeric'?p.size_number+' '+p.size_unit:p.size_label}</small><b>{money(p.price_paise_per_kg)}<em>/kg</em></b></div>{canWrite&&<div className="fp-customer-qty"><button onClick={()=>change(p,-1)} aria-label={'Reduce '+p.vegetable}>−</button><span>{((basket[p.id]||0)/1000).toFixed(2)} kg</span><button onClick={()=>change(p,1)} aria-label={'Increase '+p.vegetable}>+</button></div>}</article>)}{visible.length===0&&<div className="fp-emptystate"><strong>{products.length===0?'Your catalogue is being prepared':'No matching preparations'}</strong><p>{products.length===0?'The kitchen catalogue is empty. Ask your account manager to publish products.':'Try a different vegetable, cut or size.'}</p></div>}</div>
  </section><aside className="fp-customer-checkout"><div className="fp-checkout-heading"><span>YOUR ORDER</span><h3>{view==='Recurring'?'Schedule deliveries':'Delivery details'}</h3></div><label>Kitchen<select value={kitchen} onChange={e=>{setKitchen(e.target.value);setSlot('')}}><option value="">Choose kitchen</option>{kitchens.map(k=><option key={k.id} value={k.id}>{k.name}</option>)}</select></label>
  <label>{view==='Recurring'?'Start date':'Delivery date'}<input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><label>Delivery window<select value={slot} onChange={e=>setSlot(e.target.value)}><option value="">Select a slot</option>{suitable.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
  {view==='Recurring'&&<><label>Frequency<select value={frequency} onChange={e=>setFrequency(e.target.value as 'DAILY'|'WEEKLY')}><option value="DAILY">Daily</option><option value="WEEKLY">Selected weekdays</option></select></label>
  {frequency==='WEEKLY'&&<div className="fp-customer-days">{dayNames.map((n,i)=><button className={weekdays.includes(i)?'selected':''} key={n} onClick={()=>setWeekdays(old=>old.includes(i)?old.filter(x=>x!==i):[...old,i])}>{n}</button>)}</div>}</>}
- <div className="fp-customer-total"><span>Selected products</span><b>{selected.length}</b></div><div className="fp-customer-total"><span>Indicative total per delivery</span><b>{money(total)}</b></div>
- {canWrite&&<button className="fp-customer-submit" disabled={busy} onClick={()=>void submit(view==='Recurring')}>{busy?'Processing…':view==='Recurring'?'Create recurring schedule':'Confirm order'}</button>}
+ <div className="fp-customer-total"><span>Selected products</span><b>{selected.length}</b></div><div className="fp-customer-total"><span>Product subtotal</span><b>{money(subtotal)}</b></div><div className="fp-customer-total"><span>Contract delivery fee</span><b>{money(deliveryFee)}</b></div><div className="fp-customer-total grand"><span>Estimated total incl. delivery</span><b>{money(total)}</b></div>
+  {canWrite&&<button className="fp-customer-submit" disabled={busy} onClick={()=>void submit(view==='Recurring')}>{busy?'Processing…':view==='Recurring'?'Create recurring schedule':'Confirm order'}</button>}
+  {canRequestQuote&&view==='Order'&&<button className="fp-customer-quote-button" type="button" disabled={busy||!selected.length} onClick={()=>void requestQuote()}>{busy?'Submitting…':'Request a quote'}</button>
  <small>Prices are indicative until confirmed. Slot capacity and booking cutoff are checked before your order is accepted. Recurring orders are generated before each cutoff by operations.</small></aside></div>}
  </div>;
 }
