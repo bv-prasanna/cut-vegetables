@@ -139,3 +139,19 @@
 .fp-ops-empty{padding:13px;border:1px dashed #d8e5da;border-radius:10px;color:#7b8c7e;font-size:12px;line-height:1.6}
 .fp-ops-refresh{border:1px solid #cfe0d2;background:#f7fbf7;color:#1d5b3b;border-radius:9px;padding:9px 12px;font-size:11px;font-weight:800;cursor:pointer}
 @media(max-width:560px){.fp-ops-form{grid-template-columns:1fr}.fp-ops-field.full,.fp-ops-submit{grid-column:1}.fp-ops-action{padding:16px}}
+
+.fp-contract-admin{display:grid;gap:18px}
+.fp-secure-kicker{font-size:10px;letter-spacing:1.4px;font-weight:900;color:#3b8051}
+.fp-secure-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.fp-contract-admin form{display:grid;gap:11px}
+.fp-contract-admin label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#45614d}
+.fp-contract-admin input,.fp-contract-admin select{width:100%;min-width:0;padding:10px 11px;border:1px solid #d9e6da;border-radius:8px;background:#fff;color:#25402e;font:inherit}
+.fp-contract-admin button{border:0;border-radius:8px;padding:11px 14px;background:#185d3b;color:#fff;font-weight:800;cursor:pointer}
+.fp-contract-admin button:disabled{opacity:.55;cursor:not-allowed}
+.fp-contract-rules{margin-top:15px;border-top:1px solid #e7eee7;padding-top:12px}
+.fp-contract-rules article{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #edf2ed}
+.fp-contract-rules article div{display:grid;gap:4px;min-width:0}
+.fp-contract-rules article span,.fp-contract-rules article small{font-size:11px;color:#758278}
+.fp-contract-price-form{grid-template-columns:repeat(3,minmax(0,1fr));align-items:end}
+.fp-contract-price-form button{align-self:end}
+@media(max-width:760px){.fp-secure-form-grid,.fp-contract-price-form{grid-template-columns:1fr}.fp-contract-rules article{align-items:flex-start;flex-direction:column}}
