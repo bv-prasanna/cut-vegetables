@@ -1,10 +1,10 @@
 export const permissions = {
  SUPERADMIN:['*'],
- ADMIN:['catalog:read','catalog:write','slots:read','slots:write','orders:read','orders:approve','schedules:read','marketing:write','reports:read','users:manage','audit:read','contracts:read','contracts:manage','pricing:approve'],
- SALES:['catalog:read','orders:read','customers:read','customers:write','pricing:propose','reports:read','contracts:read','contracts:propose'],
- CUSTOMER_ADMIN:['catalog:read','orders:write','orders:read','schedules:write','schedules:read','buyers:manage','invoices:read'],
- CUSTOMER_BUYER:['catalog:read','orders:write','orders:read','schedules:write','schedules:read','invoices:read'],
- CUSTOMER_VIEWER:['catalog:read','orders:read','schedules:read','invoices:read'],
+ ADMIN:['catalog:read','catalog:write','slots:read','slots:write','orders:read','orders:approve','schedules:read','marketing:write','reports:read','users:manage','audit:read','contracts:read','contracts:manage','pricing:approve','quotes:read','quotes:manage'],
+ SALES:['catalog:read','orders:read','customers:read','customers:write','pricing:propose','reports:read','contracts:read','contracts:propose','quotes:read','quotes:propose'],
+ CUSTOMER_ADMIN:['catalog:read','orders:write','orders:read','schedules:write','schedules:read','buyers:manage','invoices:read','quotes:read','quotes:request','quotes:accept'],
+ CUSTOMER_BUYER:['catalog:read','orders:write','orders:read','schedules:write','schedules:read','invoices:read','quotes:read','quotes:request','quotes:accept'],
+ CUSTOMER_VIEWER:['catalog:read','orders:read','schedules:read','invoices:read','quotes:read'],
  PROCUREMENT:['procurement:write','procurement:read','inventory:read','orders:read'],
  STORE:['inventory:read','inventory:write','procurement:read','production:read'],
  OPERATOR:['orders:read','production:read','production:write'],
@@ -13,7 +13,7 @@ export const permissions = {
  PACKER:['orders:read','packing:read','packing:write','qc:read'],
  DISPATCH:['orders:read','delivery:read','delivery:assign','delivery:write'],
  DRIVER:['delivery:assigned','delivery:pod','delivery:location'],
- FINANCE:['orders:read','finance:read','finance:write','invoices:read','invoices:write','loyalty:review','contracts:read'],
+ FINANCE:['orders:read','finance:read','finance:write','invoices:read','invoices:write','loyalty:review','contracts:read','quotes:read'],
  MARKETING:['catalog:read','marketing:read','marketing:write'],
  AUDITOR:['audit:read','reports:read','orders:read','finance:read']
 } as const;

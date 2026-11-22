@@ -16,7 +16,7 @@ type Created={organizationId:string;kitchenId:string};
 suite('real PostgreSQL UAT and negative flows',()=>{
  let pool:Pool;
  let app:ReturnType<typeof createProductionApp>;
- let adminToken='',customerToken='',customerOrg='',kitchenId='',slotId='',variantId='',grams=500,deliveryDate='',producerOrg='',orderId='',contractId='',basePrice=0,minimumGrams=0,incrementGrams=0;
+ let adminToken='',customerToken='',customerOrg='',kitchenId='',slotId='',variantId='',grams=500,deliveryDate='',producerOrg='',orderId='',contractId='',basePrice=0,minimumGrams=0,incrementGrams=0,quoteVariantId='',quoteGrams=0,quoteBasePrice=0,quoteMinimum=0,quoteIncrement=0,quoteId='';
  const event={eventType:'ORDER_CREATED',subjectType:'ORDER',subjectId:'pending',
   location:{source:'UNAVAILABLE',unavailableReason:'CI cannot read device GPS',consentStatus:'NOT_REQUESTED'},
   details:{client:'ci-integration'}};
@@ -48,7 +48,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(health.status).toBe(200);expect(me.status).toBe(200);expect(cat.status).toBe(200);
   const products=await cat.json() as {id:string;minimum_grams:number;increment_grams:number;price_paise_per_kg:number}[];
   expect(products.length).toBeGreaterThanOrEqual(100);
-  variantId=products[0].id;grams=products[0].minimum_grams;basePrice=products[0].price_paise_per_kg;minimumGrams=products[0].minimum_grams;incrementGrams=products[0].increment_grams;
+  variantId=products[0].id;grams=products[0].minimum_grams;basePrice=products[0].price_paise_per_kg;minimumGrams=products[0].minimum_grams;incrementGrams=products[0].increment_grams;quoteVariantId=products[1].id;quoteGrams=products[1].minimum_grams;quoteBasePrice=products[1].price_paise_per_kg;quoteMinimum=products[1].minimum_grams;quoteIncrement=products[1].increment_grams;
  });
  it('rejects untrusted role header and unauthorised endpoints',async()=>{
   expect((await app.request('/v1/admin/staff',{headers:{'x-role':'SUPERADMIN'}})).status).toBe(401);
@@ -86,6 +86,10 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   });
   expect(priceRule.status).toBe(201);
   expect(await priceRule.json()).toMatchObject({status:'APPROVED'});
+  const quotePriceRule=await request('/v1/admin/contracts/'+contractId+'/prices','POST',{
+   variantId:quoteVariantId,pricePaisePerKg:quoteBasePrice+400,minimumGrams:quoteMinimum,incrementGrams:quoteIncrement,effectiveFrom:today
+  });
+  expect(quotePriceRule.status).toBe(201);
   const activated=await request('/v1/admin/contracts/'+contractId+'/status','PATCH',{status:'ACTIVE'});
   expect(activated.status).toBe(200);
   const contractedCatalog=await request('/v1/catalog?kitchenId='+kitchenId+'&deliveryDate='+deliveryDate,'GET',undefined,customerToken);
@@ -103,6 +107,31 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect((await request('/v1/orders','POST',{...body,items:[]},customerToken)).status).toBe(400);
   expect((await request('/v1/orders','POST',{...body,items:[{variantId,grams:grams+1}]},customerToken)).status).toBe(422);
   expect((await request('/v1/orders','POST',{...body,kitchenId:'11111111-1111-4111-8111-111111111111'},customerToken)).status).toBe(422);
+ });
+ it('supports buyer quote request, sales proposal, acceptance and idempotent replay',async()=>{
+  const created=await request('/v1/quotes','POST',{
+   kitchenId,slotId,deliveryDate,idempotencyKey:'quote-request-idempotency-0001',
+   items:[{variantId:quoteVariantId,grams:quoteGrams}]
+  },customerToken);
+  expect(created.status).toBe(201);
+  quoteId=(await created.json() as {id:string}).id;
+  expect((await request('/v1/quotes/'+quoteId,'GET',undefined,customerToken)).status).toBe(200);
+  expect((await request('/v1/admin/quotes/'+quoteId+'/propose','POST',{discountPaise:0},customerToken)).status).toBe(403);
+  const proposed=await request('/v1/admin/quotes/'+quoteId+'/propose','POST',{discountPaise:100,validHours:48,note:'Approved UAT discount'});
+  expect(proposed.status).toBe(200);
+  expect(await proposed.json()).toMatchObject({state:'PROPOSED',discountPaise:100});
+  const accepted=await request('/v1/quotes/'+quoteId+'/accept','POST',{},customerToken);
+  expect(accepted.status).toBe(201);
+  const acceptedBody=await accepted.json() as {id:string;replayed:boolean};
+  expect(acceptedBody.replayed).toBe(false);
+  const replay=await request('/v1/quotes/'+quoteId+'/accept','POST',{},customerToken);
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toMatchObject({id:acceptedBody.id,replayed:true});
+  const snapshot=await pool.query<{quote_id:string;discount_paise:string;total_paise:string;subtotal_paise:string;delivery_fee_paise:string}>(
+   'SELECT quote_id,discount_paise,total_paise,subtotal_paise,delivery_fee_paise FROM orders WHERE id=$1',[acceptedBody.id]);
+  expect(snapshot.rows[0].quote_id).toBe(quoteId);
+  expect(Number(snapshot.rows[0].discount_paise)).toBe(100);
+  expect(Number(snapshot.rows[0].total_paise)).toBe(Number(snapshot.rows[0].subtotal_paise)-100+Number(snapshot.rows[0].delivery_fee_paise));
  });
  it('creates one order and replays idempotently without double-reserving the slot',async()=>{
   const key='integration-safe-order-key-0001';
