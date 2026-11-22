@@ -46,6 +46,59 @@ export function createStaffBoardRoutes(pool:Pool){
   return c.json(q.rows.map(row=>({...row,required_grams:toNumber(row.required_grams),input_grams:toNumber(row.input_grams),
    qc_approved_grams:toNumber(row.qc_approved_grams),packed_grams:toNumber(row.packed_grams)})));
  });
+
+ app.get('/ops/production-summary',async c=>{
+  if(!canAny(c.get('roles'),'production:read'))return c.json(reject('Forbidden'),403);
+  const p=params({date:c.req.query('date')});
+  if(!p.success)return c.json(reject('Valid date YYYY-MM-DD is required'),400);
+  const q=await pool.query(\`
+   WITH slot_demand AS (
+    SELECT o.slot_id,ds.label AS slot_label,ds.start_minute,oi.variant_id,
+     pv.sku,v.name AS vegetable,pv.method_code AS preparation,
+     CASE WHEN pv.size_kind='numeric' THEN pv.size_number::text||' '||pv.size_unit ELSE pv.size_label END AS size,
+     SUM(oi.grams)::bigint AS required_grams,COUNT(DISTINCT o.id)::int AS order_count
+    FROM orders o JOIN order_items oi ON oi.order_id=o.id
+     JOIN delivery_slots ds ON ds.id=o.slot_id
+     JOIN product_variants pv ON pv.id=oi.variant_id JOIN vegetables v ON v.id=pv.vegetable_id
+    WHERE o.producer_organization_id=$1 AND o.delivery_date=$2::date AND o.state<>'CANCELLED'
+    GROUP BY o.slot_id,ds.label,ds.start_minute,oi.variant_id,pv.sku,v.name,pv.method_code,
+     pv.size_kind,pv.size_number,pv.size_unit,pv.size_label
+   ), batch_progress AS (
+    SELECT o.slot_id,pb.variant_id,
+     COALESCE(SUM(pb.input_grams) FILTER(WHERE pb.state NOT IN ('SCRAPPED','QC_FAILED')),0)::bigint AS input_grams,
+     COALESCE(SUM(pb.output_grams) FILTER(WHERE pb.state IN ('QC_PASSED','PACKED')),0)::bigint AS qc_approved_grams
+    FROM production_batches pb JOIN orders o ON o.id=pb.order_id
+    WHERE o.producer_organization_id=$1 AND o.delivery_date=$2::date
+    GROUP BY o.slot_id,pb.variant_id
+   ), pack_progress AS (
+    SELECT o.slot_id,pb.variant_id,COALESCE(SUM(pu.net_grams),0)::bigint AS packed_grams
+    FROM pack_units pu JOIN production_batches pb ON pb.id=pu.batch_id
+     JOIN orders o ON o.id=pb.order_id
+    WHERE o.producer_organization_id=$1 AND o.delivery_date=$2::date
+    GROUP BY o.slot_id,pb.variant_id
+   )
+   SELECT sd.variant_id,sd.sku,sd.vegetable,sd.preparation,sd.size,
+    SUM(sd.required_grams)::bigint AS daily_required_grams,
+    SUM(sd.order_count)::int AS order_count,
+    SUM(COALESCE(bp.input_grams,0))::bigint AS input_grams,
+    SUM(COALESCE(bp.qc_approved_grams,0))::bigint AS qc_approved_grams,
+    SUM(COALESCE(pp.packed_grams,0))::bigint AS packed_grams,
+    json_agg(json_build_object(
+     'slotId',sd.slot_id,'slot',sd.slot_label,'requiredGrams',sd.required_grams,
+     'orderCount',sd.order_count,'inputGrams',COALESCE(bp.input_grams,0),
+     'qcApprovedGrams',COALESCE(bp.qc_approved_grams,0),'packedGrams',COALESCE(pp.packed_grams,0)
+    ) ORDER BY sd.start_minute,sd.slot_label) AS slot_breakdown
+   FROM slot_demand sd
+    LEFT JOIN batch_progress bp ON bp.slot_id=sd.slot_id AND bp.variant_id=sd.variant_id
+    LEFT JOIN pack_progress pp ON pp.slot_id=sd.slot_id AND pp.variant_id=sd.variant_id
+   GROUP BY sd.variant_id,sd.sku,sd.vegetable,sd.preparation,sd.size
+   ORDER BY sd.vegetable,sd.preparation,sd.size
+  \`,[c.get('organizationId'),p.data.date]);
+  return c.json(q.rows.map(row=>({...row,daily_required_grams:toNumber(row.daily_required_grams),
+   order_count:toNumber(row.order_count),input_grams:toNumber(row.input_grams),
+   qc_approved_grams:toNumber(row.qc_approved_grams),packed_grams:toNumber(row.packed_grams)})));
+ });
+
  app.get('/ops/packing-board',async c=>{
   if(!canAny(c.get('roles'),'packing:read')&&!canAny(c.get('roles'),'packing:write'))return c.json(reject('Forbidden'),403);
   const p=params({date:c.req.query('date'),slotId:c.req.query('slotId')||undefined});

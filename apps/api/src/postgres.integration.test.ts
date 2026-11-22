@@ -97,6 +97,29 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   const db=await pool.query<{n:string}>('SELECT count(*)::text AS n FROM slot_reservations WHERE order_id=$1',[created.id]);
   expect(Number(db.rows[0].n)).toBe(1);
  });
+
+ it('consolidates cutter demand across all delivery slots with a slot-wise breakdown',async()=>{
+  const slot=await pool.query<{id:string}>(\`INSERT INTO delivery_slots
+   (zone_code,label,start_minute,end_minute,cutoff_day_offset,cutoff_minute,capacity_orders,active)
+   VALUES('BENGALURU_DEMO','Afternoon CI',840,1020,0,660,100,true) RETURNING id\`);
+  const secondOrder=await request('/v1/orders','POST',{
+   kitchenId,slotId:slot.rows[0].id,deliveryDate,idempotencyKey:'integration-safe-order-key-0002',
+   items:[{variantId,grams}],event
+  },customerToken);
+  expect(secondOrder.status).toBe(201);
+  const response=await request('/v1/ops/production-summary?date='+deliveryDate);
+  expect(response.status).toBe(200);
+  const rows=await response.json() as {variant_id:string;daily_required_grams:number;order_count:number;
+   slot_breakdown:{slotId:string;requiredGrams:number}[]}[];
+  const item=rows.find(x=>x.variant_id===variantId);
+  expect(item).toBeTruthy();
+  expect(item!.daily_required_grams).toBe(grams*2);
+  expect(item!.order_count).toBe(2);
+  expect(item!.slot_breakdown).toHaveLength(2);
+  expect(item!.slot_breakdown.map(x=>x.slotId)).toContain(slot.rows[0].id);
+  expect((await request('/v1/ops/production-summary?date='+deliveryDate,'GET',undefined,customerToken)).status).toBe(403);
+ });
+
  it('generates a recurring order exactly once and exposes it only to the customer org',async()=>{
   const newSchedule=await request('/v1/recurrences','POST',{
    kitchenId,slotId,startDate:deliveryDate,frequency:'DAILY',weekdays:[],
