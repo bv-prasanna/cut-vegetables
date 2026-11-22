@@ -91,8 +91,8 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   const contractedCatalog=await request('/v1/catalog?kitchenId='+kitchenId+'&deliveryDate='+deliveryDate,'GET',undefined,customerToken);
   expect(contractedCatalog.status).toBe(200);
   const contractedProducts=await contractedCatalog.json() as {id:string;price_paise_per_kg:number;delivery_fee_paise:number}[];
-  expect(contractedProducts.find(x=>x.id===variantId)?.price_paise_per_kg).toBe(basePrice+250);
-  expect(contractedProducts.find(x=>x.id===variantId)?.delivery_fee_paise).toBe(1500);
+  expect(Number(contractedProducts.find(x=>x.id===variantId)?.price_paise_per_kg)).toBe(basePrice+250);
+  expect(Number(contractedProducts.find(x=>x.id===variantId)?.delivery_fee_paise)).toBe(1500);
  });
  it('validates order payloads, rejects invalid quantity and enforces scoped kitchen',async()=>{
   const slots=await request('/v1/delivery-slots','GET',undefined,customerToken);
