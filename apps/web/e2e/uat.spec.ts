@@ -129,7 +129,7 @@ test('admin: dashboard, staff, customers, catalogue and slots all mount without 
  await page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('button',{name:'Slots'}).click();
  await expect(page.getByRole('heading',{name:'Delivery Windows',exact:true})).toBeVisible();
  await page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('button',{name:'Contracts'}).click();
- await expect(page.getByRole('heading',{name:'Buyer contracts & price books'})).toBeVisible();
+ await expect(page.locator('#workspace-content').getByRole('heading',{name:'Buyer contracts & price books'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Buyer quote requests'})).toBeVisible();
  expect(errors).toEqual([]);
 });
