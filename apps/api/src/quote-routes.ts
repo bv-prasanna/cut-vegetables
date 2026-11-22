@@ -8,7 +8,7 @@ import {localDate,cutoffInstant} from './scheduling.js';
 import {loadContractPricing} from './commercial-pricing.js';
 type Env={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const uuid=z.string().uuid();
-const date=z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).refine(v=>{try{localDate(v);return true;}catch{return false;}});
+const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{try{localDate(v);return true;}catch{return false;}});
 const quoteInput=z.object({
  kitchenId:uuid,slotId:uuid,deliveryDate:date,idempotencyKey:z.string().min(8).max(120),
  items:z.array(z.object({variantId:uuid,grams:z.number().int().positive().max(1_000_000)})).min(1).max(50),
