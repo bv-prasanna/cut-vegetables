@@ -12,6 +12,7 @@ type Product={id:string;vegetable:string;preparation:string;sku:string;
 type Order={id:string;kitchen_id:string;slot_id:string;delivery_date:string;state:string;created_at:string};
 type Quote={id:string;quote_number:number|string;state:string;delivery_date:string;valid_until:string;subtotal_paise:number|string;delivery_fee_paise:number|string;discount_paise:number|string;total_paise:number|string;note:string|null;accepted_order_id:string|null};
 type Schedule={id:string;kitchen_id:string;slot_id:string;frequency:string;weekdays:number[];start_date:string;end_date:string|null;state:string};
+type SupportCase={id:string;case_number:number|string;order_id:string;category:string;description:string;requested_resolution?:string|null;state:string;resolution_note?:string|null;created_at:string};
 type Props={token:string;base:string;roles:string[];onLogout:()=>void};
 const money=(p:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(p/100);
 const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -39,7 +40,8 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const canWrite=roles.includes('SUPERADMIN')||roles.includes('CUSTOMER_BUYER')||roles.includes('CUSTOMER_ADMIN');
  const canRequestQuote=canWrite;
  const [products,setProducts]=useState<Product[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]),[slots,setSlots]=useState<Slot[]>([]);
- const [orders,setOrders]=useState<Order[]>([]),[schedules,setSchedules]=useState<Schedule[]>([]),[quotes,setQuotes]=useState<Quote[]>([]);
+ const [orders,setOrders]=useState<Order[]>([]),[schedules,setSchedules]=useState<Schedule[]>([]),[quotes,setQuotes]=useState<Quote[]>([]),[supportCases,setSupportCases]=useState<SupportCase[]>([]);
+ const [supportOrder,setSupportOrder]=useState(''),[supportCategory,setSupportCategory]=useState('QUALITY'),[supportDescription,setSupportDescription]=useState(''),[supportResolution,setSupportResolution]=useState('');
  const [view,setView]=useState<'Order'|'Recurring'|'History'>('Order');
  const [search,setSearch]=useState(''),[basket,setBasket]=useState<Record<string,number>>({});
  const [kitchen,setKitchen]=useState(''),[slot,setSlot]=useState(''),[date,setDate]=useState(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}));
@@ -60,11 +62,12 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const refresh=useCallback(async()=>{
   setBusy(true);setError('');
   try{
-   const [k,s,o,r,q]=await Promise.all([
+   const [k,s,o,r,q,sc]=await Promise.all([
     call<Kitchen[]>('/v1/kitchens'),call<Slot[]>('/v1/delivery-slots'),
-    call<Order[]>('/v1/orders'),call<Schedule[]>('/v1/recurrences'),call<Quote[]>('/v1/quotes')
+    call<Order[]>('/v1/orders'),call<Schedule[]>('/v1/recurrences'),call<Quote[]>('/v1/quotes'),call<SupportCase[]>('/v1/support/cases')
    ]);
-   setKitchens(k);setSlots(s);setOrders(o);setSchedules(r);setQuotes(q);
+   setKitchens(k);setSlots(s);setOrders(o);setSchedules(r);setQuotes(q);setSupportCases(sc);
+   setSupportOrder(old=>o.some(x=>x.id===old)?old:(o.find(x=>x.state==='DELIVERED')?.id||o[0]?.id||''));
    setKitchen(old=>k.some(x=>x.id===old)?old:k[0]?.id||'');
    if(!k.length)setProducts([]);
   }catch(e){setError(e instanceof Error?e.message:'Unable to load ordering');}
@@ -138,7 +141,22 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
    }catch(e){setError(e instanceof Error?e.message:'Unable to request a quote');}
    finally{setBusy(false);}
   }
-  async function acceptQuote(q:Quote){
+  async function createSupportCase(){
+  if(!canWrite||!supportOrder||supportDescription.trim().length<10){setError('Select an order and describe the issue in at least 10 characters.');return;}
+  setBusy(true);setError('');setStatus('');
+  try{
+   const event=await capture('SUPPORT_CASE_CREATED','SUPPORT_CASE');
+   const saved=await call<{case_number:number|string;state:string}>('/v1/support/cases','POST',{
+    orderId:supportOrder,category:supportCategory,description:supportDescription.trim(),
+    requestedResolution:supportResolution.trim()||undefined,event
+   });
+   setSupportDescription('');setSupportResolution('');
+   setStatus('Support case #'+saved.case_number+' opened. Our team will review it.');
+   await refresh();
+  }catch(e){setError(e instanceof Error?e.message:'Unable to open support case');}
+  finally{setBusy(false);}
+ }
+ async function acceptQuote(q:Quote){
    setBusy(true);setError('');setStatus('');
    try{
     const result=await call<{id:string;replayed:boolean}>('/v1/quotes/'+q.id+'/accept','POST',{});
@@ -186,7 +204,16 @@ async function setScheduleState(s:Schedule,state:'ACTIVE'|'PAUSED'|'CANCELLED'){
  <nav className="fp-customer-tabs"><button className={view==='Order'?'active':''} onClick={()=>setView('Order')}>One-time order</button><button className={view==='Recurring'?'active':''} onClick={()=>setView('Recurring')}>Recurring supply</button><button className={view==='History'?'active':''} onClick={()=>setView('History')}>Orders & schedules</button></nav>
  {!canWrite&&<p className="fp-customer-info">Your role permits viewing orders but not creating or changing them.</p>}
  {view==='History'?<div className="fp-customer-history"><section><h3>Recent orders</h3>{orders.length?orders.map(o=><article key={o.id}><b>{o.id.slice(0,12)}</b><span>{o.delivery_date}</span><span>{o.state}</span>{canWrite&&o.state==='CONFIRMED'&&<button type="button" disabled={busy} onClick={()=>void cancelOrder(o)}>Cancel order</button>}</article>):<p>No orders yet.</p>}</section>
- <section><h3>Recurring schedules</h3>{schedules.length?schedules.map(s=><article key={s.id}><div><b>{s.frequency} · {s.state}</b><p>{s.start_date}{s.end_date?' – '+s.end_date:''}</p><small>{s.id}</small></div>{canWrite&&<div className="fp-customer-actions"><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,s.state==='ACTIVE'?'PAUSED':'ACTIVE')}>{s.state==='ACTIVE'?'Pause':'Resume'}</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void skipDate(s)}>Skip selected date</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,'CANCELLED')}>Cancel</button></div>}</article>):<p>No recurring schedules.</p>}</section><section className="fp-customer-quotes"><h3>Quote requests</h3>{quotes.length?quotes.map(q=><article key={q.id}><div><b>Quote #{q.quote_number} · {q.state}</b><p>Delivery {q.delivery_date} · Total {money(Number(q.total_paise))}</p>{q.note&&<small>{q.note}</small>}{q.valid_until&&<small>Valid until {new Date(q.valid_until).toLocaleString('en-IN')}</small>}{q.accepted_order_id&&<small>Order {q.accepted_order_id.slice(0,12)}</small>}</div>{q.state==='PROPOSED'&&canWrite&&<div className="fp-customer-actions"><button disabled={busy} onClick={()=>void acceptQuote(q)}>Accept quote</button><button disabled={busy} onClick={()=>void rejectQuote(q)}>Decline</button></div>}</article>):<p>No quote requests yet.</p>}</section></div>:
+ <section><h3>Recurring schedules</h3>{schedules.length?schedules.map(s=><article key={s.id}><div><b>{s.frequency} · {s.state}</b><p>{s.start_date}{s.end_date?' – '+s.end_date:''}</p><small>{s.id}</small></div>{canWrite&&<div className="fp-customer-actions"><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,s.state==='ACTIVE'?'PAUSED':'ACTIVE')}>{s.state==='ACTIVE'?'Pause':'Resume'}</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void skipDate(s)}>Skip selected date</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,'CANCELLED')}>Cancel</button></div>}</article>):<p>No recurring schedules.</p>}</section><section className="fp-customer-quotes"><h3>Quote requests</h3>{quotes.length?quotes.map(q=><article key={q.id}><div><b>Quote #{q.quote_number} · {q.state}</b><p>Delivery {q.delivery_date} · Total {money(Number(q.total_paise))}</p>{q.note&&<small>{q.note}</small>}{q.valid_until&&<small>Valid until {new Date(q.valid_until).toLocaleString('en-IN')}</small>}{q.accepted_order_id&&<small>Order {q.accepted_order_id.slice(0,12)}</small>}</div>{q.state==='PROPOSED'&&canWrite&&<div className="fp-customer-actions"><button disabled={busy} onClick={()=>void acceptQuote(q)}>Accept quote</button><button disabled={busy} onClick={()=>void rejectQuote(q)}>Decline</button></div>}</article>):<p>No quote requests yet.</p>}</section><section className="fp-customer-support"><h3>Support, complaints & returns</h3>
+ {canWrite&&<div className="fp-customer-support-form">
+  <label>Order<select value={supportOrder} onChange={e=>setSupportOrder(e.target.value)}><option value="">Choose an order</option>{orders.map(o=><option key={o.id} value={o.id}>{o.id.slice(0,12)} · {o.delivery_date} · {o.state}</option>)}</select></label>
+  <label>Issue type<select value={supportCategory} onChange={e=>setSupportCategory(e.target.value)}>{[['QUALITY','Quality concern'],['SHORTAGE','Missing / short quantity'],['WRONG_ITEM','Wrong item'],['LATE_DELIVERY','Late delivery'],['PACKAGING','Packaging issue'],['BILLING','Billing query'],['RETURN_REQUEST','Return request'],['OTHER','Other']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
+  <label>Describe the issue<textarea rows={3} maxLength={4000} value={supportDescription} onChange={e=>setSupportDescription(e.target.value)} placeholder="Please include the item, quantity and what went wrong…"/></label>
+  <label>Requested resolution (optional)<input value={supportResolution} maxLength={1000} onChange={e=>setSupportResolution(e.target.value)} placeholder="Replacement, account credit, clarification…"/></label>
+  <button type="button" disabled={busy||!supportOrder||supportDescription.trim().length<10} onClick={()=>void createSupportCase()}>{busy?'Submitting…':'Submit support request'}</button>
+ </div>}
+ <div className="fp-customer-support-list">{supportCases.length?supportCases.map(sc=><article key={sc.id}><div><b>Case #{sc.case_number} · {sc.category.replaceAll('_',' ')}</b><span>{sc.state.replaceAll('_',' ')}</span><p>{sc.description}</p>{sc.resolution_note&&<small>Resolution: {sc.resolution_note}</small>}<small>Order {sc.order_id.slice(0,12)} · {new Date(sc.created_at).toLocaleString('en-IN')}</small></div></article>):<p>No support cases yet.</p>}</div>
+ </section></div>:
  <div className="fp-customer-order"><section className="fp-customer-products"><div className="fp-customer-filter"><div><h3>Prepared vegetables</h3><p>{visible.length} fresh-cut options · prices shown per kilogram</p></div><input type="search" aria-label="Search the catalogue" placeholder="Search vegetable, cut or size…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
  <div className="fp-customer-grid">{visible.map(p=><article key={p.id}><ProductPhoto item={p}/><div className="fp-product-info"><strong>{p.vegetable}</strong><small>{p.preparation.toLowerCase()} · {p.size_kind==='numeric'?p.size_number+' '+p.size_unit:p.size_label}</small><b>{money(p.price_paise_per_kg)}<em>/kg</em></b></div>{canWrite&&<div className="fp-customer-qty"><button onClick={()=>change(p,-1)} aria-label={'Reduce '+p.vegetable}>−</button><span>{((basket[p.id]||0)/1000).toFixed(2)} kg</span><button onClick={()=>change(p,1)} aria-label={'Increase '+p.vegetable}>+</button></div>}</article>)}{visible.length===0&&<div className="fp-emptystate"><strong>{products.length===0?'Your catalogue is being prepared':'No matching preparations'}</strong><p>{products.length===0?'The kitchen catalogue is empty. Ask your account manager to publish products.':'Try a different vegetable, cut or size.'}</p></div>}</div>
  </section><aside className="fp-customer-checkout"><div className="fp-checkout-heading"><span>YOUR ORDER</span><h3>{view==='Recurring'?'Schedule deliveries':'Delivery details'}</h3></div><label>Kitchen<select value={kitchen} onChange={e=>{setKitchen(e.target.value);setSlot('')}}><option value="">Choose kitchen</option>{kitchens.map(k=><option key={k.id} value={k.id}>{k.name}</option>)}</select></label>
