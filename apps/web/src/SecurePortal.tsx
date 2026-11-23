@@ -8,6 +8,7 @@ import SecureMarketingAdmin from './SecureMarketingAdmin';
 import ContractAdmin from './ContractAdmin';
 import SupportAdmin from './SupportAdmin';
 import FinanceAdmin from './FinanceAdmin';
+import OfferAdmin from './OfferAdmin';
 import {apiRequest,FriendlyApiError} from './api-errors';
 type Session={accessToken:string;tokenType:string;expiresInSeconds:number};
 type Profile={userId:string;organizationId:string;roles:string[]};
@@ -162,6 +163,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  {tab==='Support'&&session&&<SupportAdmin base={BASE} token={session.accessToken} canResolve={canAdmin} onSessionExpired={()=>void logout()}/>}
  {tab==='Finance'&&session&&<FinanceAdmin base={BASE} token={session.accessToken} onSessionExpired={()=>void logout()}/>}
  {tab==='Marketing'&&session&&<SecureMarketingAdmin base={BASE} token={session.accessToken} onSessionExpired={()=>void logout()}/>}
+ {tab==='Marketing'&&session&&<OfferAdmin base={BASE} token={session.accessToken} canApprove={canAdmin} onSessionExpired={()=>void logout()}/>}
  {tab==='Supply'&&session&&profile&&<CustomerOrderPortal token={session.accessToken} base={BASE} roles={profile.roles} onLogout={()=>void logout()}/>}
  {(tab==='Catalogue'||tab==='Slots')&&session&&<CatalogAdmin base={BASE} token={session.accessToken} superadmin={profile?.roles.includes('SUPERADMIN')??false} mode={tab}/>}
  {tab==='Overview'&&<section className="fp-secure-panels" aria-label="Business key metrics">
