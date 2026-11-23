@@ -2,7 +2,7 @@ import React,{useCallback,useEffect,useState} from 'react';
 import {apiRequest,FriendlyApiError} from './api-errors';
 import './offer-admin.css';
 type Offer={id:string;code:string;name:string;description:string|null;discount_type:'FIXED_PAISE'|'PERCENT_BPS';discount_value:number;minimum_subtotal_paise:number;max_discount_paise:number|null;starts_at:string;ends_at:string;max_redemptions:number|null;per_buyer_limit:number;status:string};
-export default function OfferAdmin({base,token,onSessionExpired}:{base:string;token:string;onSessionExpired:()=>void}){
+export default function OfferAdmin({base,token,canApprove,onSessionExpired}:{base:string;token:string;canApprove:boolean;onSessionExpired:()=>void}){
  const [offers,setOffers]=useState<Offer[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const [code,setCode]=useState(''),[name,setName]=useState(''),[description,setDescription]=useState('');
  const [type,setType]=useState<'FIXED_PAISE'|'PERCENT_BPS'>('PERCENT_BPS'),[value,setValue]=useState(''),[cap,setCap]=useState('');
@@ -35,7 +35,7 @@ export default function OfferAdmin({base,token,onSessionExpired}:{base:string;to
      <h4>{o.name}</h4><p>{o.discount_type==='PERCENT_BPS'?(Number(o.discount_value)/100)+'% off':'₹'+(Number(o.discount_value)/100).toFixed(2)+' off'}{o.max_discount_paise?' · cap ₹'+(Number(o.max_discount_paise)/100).toFixed(2):''}</p>
      <small>Valid {new Date(o.starts_at).toLocaleString('en-IN')} – {new Date(o.ends_at).toLocaleString('en-IN')}</small>
      <small>Minimum ₹{(Number(o.minimum_subtotal_paise)/100).toFixed(2)} · {o.max_redemptions??'Unlimited'} total uses · {o.per_buyer_limit} per customer</small>
-     <div className="fp-offers-actions">{o.status==='DRAFT'&&<button disabled={busy} onClick={()=>void status(o.id,'ACTIVE')}>Activate</button>}{o.status==='ACTIVE'&&<button disabled={busy} onClick={()=>void status(o.id,'PAUSED')}>Pause</button>}{o.status==='PAUSED'&&<button disabled={busy} onClick={()=>void status(o.id,'ACTIVE')}>Reactivate</button>}</div>
+     <div className="fp-offers-actions">{o.status==='DRAFT'&&canApprove&&<button disabled={busy} onClick={()=>void status(o.id,'ACTIVE')}>Activate</button>}{o.status==='ACTIVE'&&canApprove&&<button disabled={busy} onClick={()=>void status(o.id,'PAUSED')}>Pause</button>}{o.status==='PAUSED'&&canApprove&&<button disabled={busy} onClick={()=>void status(o.id,'ACTIVE')}>Reactivate</button>}</div>
     </article>)}
     {!offers.length&&<p className="fp-offers-empty">No offers configured. Create a draft when commercial terms are approved.</p>}
    </section>
