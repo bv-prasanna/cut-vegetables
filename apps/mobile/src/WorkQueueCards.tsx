@@ -18,6 +18,19 @@ const Panel=({children}:{children:React.ReactNode})=><View style={styles.card}>{
 const Head=({title,subtitle}:{title:string;subtitle?:string})=><View style={styles.cardHead}><Text style={styles.title}>{title}</Text>{Boolean(subtitle)&&<Text style={styles.subtitle}>{subtitle}</Text>}</View>;
 const Cell=({title,value}:{title:string;value:string})=><View style={styles.cell}><Text style={styles.label}>{title}</Text><Text style={styles.value}>{value}</Text></View>;
 export default function WorkQueueCards({screen,rows,loading}:Props){
+ if(screen==='Wallet'){
+  const account=rowOf(rows[0]),entries=Array.isArray(account.entries)?account.entries:[];
+  return <><Panel><Head title="Your rewards wallet" subtitle="Points are earned after successful delivery when the supplier programme is active."/>
+   <View style={styles.metricRow}><Big label="AVAILABLE POINTS" value={textOf(account.balancePoints,'0')}/><Big label="PROGRAMME" value={account.programActive?'ACTIVE':'NOT ACTIVE'}/></View>
+  </Panel><Text style={styles.sectionTitle}>Recent points activity</Text>
+   {entries.map((value,i)=>{const entry=rowOf(value),delta=gramsOf(entry.points_delta);return <Panel key={i}>
+    <View style={styles.topRow}><View style={styles.grow}><Text style={styles.title}>{humanState(entry.entry_type)}</Text><Text style={styles.subtitle}>{textOf(entry.note,'Points ledger entry')} · {textOf(entry.created_at).slice(0,10)}</Text></View>
+     <Text style={styles.itemValue}>{delta>0?'+':''}{delta} pts</Text>
+    </View>
+   </Panel>})}
+   {!entries.length&&<View style={styles.empty}><Text style={styles.subtitle}>No points activity yet.</Text></View>}
+  </>;
+ }
  if(screen==='Finance'||screen==='Invoices'){
   const money=(value:unknown)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(Number(value||0)/100);
   return <><Text style={styles.sectionTitle}>{screen==='Finance'?'Customer invoices and collection status':'Your invoices and account documents'}</Text>
