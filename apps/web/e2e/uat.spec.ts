@@ -141,7 +141,7 @@ test('admin support workspace loads its queue and protects decision controls',as
  const nav=page.getByRole('navigation',{name:'Workspace navigation'});
  await expect(nav.getByRole('button',{name:'Support'})).toBeVisible();
  await nav.getByRole('button',{name:'Support'}).click();
- await expect(page.getByRole('heading',{name:'Complaints, shortages & returns'})).toBeVisible();
+ await expect(page.locator('#workspace-content').getByRole('heading',{name:'Complaints, shortages & returns'})).toBeVisible();
  await expect(page.getByText('No cases in this view')).toBeVisible();
  await expect(page.getByLabel('Case status')).toBeVisible();
 });
