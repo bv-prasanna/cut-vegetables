@@ -421,6 +421,10 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(opened.status,await opened.clone().text()).toBe(201);
   const caseBody=await opened.json() as {id:string;case_number:number;state:string};
   expect(caseBody.state).toBe('OPEN');
+  const customerSupportInbox=await request('/v1/notifications','GET',undefined,customerToken);
+  expect((await customerSupportInbox.json() as {items:{category:string;title:string}[]}).items.some(n=>n.category==='SUPPORT'&&n.title==='Support request received')).toBe(true);
+  const supplierSupportInbox=await request('/v1/notifications','GET',undefined,adminToken);
+  expect((await supplierSupportInbox.json() as {items:{category:string;title:string}[]}).items.some(n=>n.category==='SUPPORT'&&n.title==='New customer support case')).toBe(true);
   const duplicate=await request('/v1/support/cases','POST',{
    orderId,category:'SHORTAGE',description:'A duplicate active shortage report for the same order.',
    event:{eventType:'SUPPORT_CASE_CREATED',subjectType:'SUPPORT_CASE',subjectId:'pending',
@@ -443,6 +447,8 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    state:'RESOLVED',resolutionNote:'Replacement approved and delivery credit recorded for the buyer.'
   });
   expect(resolved.status).toBe(200);
+  const resolvedInbox=await request('/v1/notifications','GET',undefined,customerToken);
+  expect((await resolvedInbox.json() as {items:{category:string;title:string}[]}).items.some(n=>n.category==='SUPPORT'&&n.title==='Support case updated')).toBe(true);
   expect(await resolved.json()).toMatchObject({id:caseBody.id,state:'RESOLVED'});
   const closedAgain=await request('/v1/support/cases/'+caseBody.id,'PATCH',{
    state:'CLOSED',resolutionNote:'Attempt to modify a resolved case'
