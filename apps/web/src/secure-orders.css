@@ -112,3 +112,13 @@
 .fp-customer-wallet-ledger article{display:grid;grid-template-columns:1fr auto;gap:3px 12px;padding:8px 10px;background:white;border:1px solid #e5eee7;border-radius:9px}
 .fp-customer-wallet-ledger b{font-size:11px}.fp-customer-wallet-ledger span{font-size:12px;font-weight:800;color:#26704a}.fp-customer-wallet-ledger small{grid-column:1/-1;font-size:10px;color:#829087}
 @media(max-width:720px){.fp-customer-wallet{grid-template-columns:1fr}}
+
+
+.fp-customer-refunds{padding:16px;border:1px solid #e3ebe5;border-radius:14px;background:#fff}
+.fp-customer-refunds>header{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.fp-customer-refunds h3{margin:0;font-size:16px}.fp-customer-refunds>header span{font-size:11px;color:#748178}
+.fp-customer-refunds article{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #edf1ee;margin-top:10px}
+.fp-customer-refunds article strong{display:block;font-size:13px}.fp-customer-refunds article small{display:block;font-size:11px;color:#748178;margin-top:4px}.fp-customer-refunds article p{font-size:12px;color:#53675a;margin:5px 0}
+.fp-customer-refund-state{font-size:10px;font-weight:850;border-radius:99px;padding:6px 9px;background:#f0f2f0;color:#53625a;white-space:nowrap}
+.fp-customer-refund-state.refunded{background:#e8f5eb;color:#286343}.fp-customer-refund-state.failed,.fp-customer-refund-state.rejected{background:#fff0ef;color:#9a3c33}
+.fp-customer-refunds>p{font-size:12px;color:#758178}
