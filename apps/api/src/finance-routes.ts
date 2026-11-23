@@ -80,6 +80,7 @@ export function createFinanceRoutes(pool:Pool){
     await tx.query('INSERT INTO finance_allocations(receipt_id,invoice_id,amount_paise,created_by) VALUES($1,$2,$3,$4)',[receipt.rows[0].id,a.invoiceId,a.amountPaise,c.get('userId')]);allocated+=a.amountPaise;
    }
    await recordEvent(tx,c.get('organizationId'),c.get('userId'),systemEvent('PAYMENT_RECEIPT_RECORDED','RECEIPT',receipt.rows[0].id),'PAYMENT_RECEIPT_RECORDED','RECEIPT',receipt.rows[0].id);
+   await notifyOrganization(tx,d.buyerOrganizationId,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'FINANCE','Payment received','A payment receipt has been recorded against your supplier account.','RECEIPT',receipt.rows[0].id,'PAYMENT_RECEIPT:'+receipt.rows[0].id,{receiptNumber:receipt.rows[0].receipt_number});
    return {...receipt.rows[0],allocatedPaise:allocated,unallocatedPaise:d.amountPaise-allocated};
   });
   return c.json(result,201);
@@ -109,7 +110,9 @@ export function createFinanceRoutes(pool:Pool){
    const credits=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_credit_notes WHERE invoice_id=$1 AND status<>\'VOID\'',[note.rows[0].invoice_id]);
    if(Number(paid.rows[0].n)+Number(credits.rows[0].n)>Number(invoice.rows[0].total_paise))throw new BusinessFailure(409,'Credit note reservations exceed the remaining invoice balance');
    await tx.query('UPDATE finance_credit_notes SET status=\'APPROVED\',approved_by=$2,approved_at=now() WHERE id=$1',[creditId,c.get('userId')]);
-   await recordEvent(tx,c.get('organizationId'),c.get('userId'),systemEvent('CREDIT_NOTE_APPROVED','CREDIT_NOTE',creditId),'CREDIT_NOTE_APPROVED','CREDIT_NOTE',creditId);return {id:creditId,status:'APPROVED'};
+   await recordEvent(tx,c.get('organizationId'),c.get('userId'),systemEvent('CREDIT_NOTE_APPROVED','CREDIT_NOTE',creditId),'CREDIT_NOTE_APPROVED','CREDIT_NOTE',creditId);
+   const buyer=await tx.query('SELECT buyer_organization_id FROM finance_invoices WHERE id=$1',[note.rows[0].invoice_id]);
+   await notifyOrganization(tx,buyer.rows[0].buyer_organization_id,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'FINANCE','Credit note approved','A credit note has been approved for your invoice.','CREDIT_NOTE',creditId,'CREDIT_NOTE_APPROVED:'+creditId);return {id:creditId,status:'APPROVED'};
   });return c.json(result);
  });
  return app;
