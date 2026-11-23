@@ -212,7 +212,7 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
     const offer=offerQ.rows[0],now=clock();
     if(offer.status!=='ACTIVE'||new Date(offer.starts_at)>now||new Date(offer.ends_at)<=now){await client.query('ROLLBACK');return c.json(reject('This offer is not currently available'),409);}
     if(subtotal<Number(offer.minimum_subtotal_paise)){await client.query('ROLLBACK');return c.json(reject('Order does not meet the minimum value for this offer'),422);}
-    const usage=await client.query('SELECT count(*)::int AS total,count(*) FILTER(WHERE buyer_organization_id=$2)::int AS buyer_total FROM offer_redemptions WHERE offer_id=$1',[offer.id,c.get('organizationId')]);
+    const usage=await client.query('SELECT count(*)::int AS total,count(*) FILTER(WHERE buyer_organization_id=$2)::int AS buyer_total FROM offer_redemptions WHERE offer_id=$1 AND reversed_at IS NULL',[offer.id,c.get('organizationId')]);
     if(offer.max_redemptions!==null&&usage.rows[0].total>=offer.max_redemptions){await client.query('ROLLBACK');return c.json(reject('This offer has reached its redemption limit'),409);}
     if(usage.rows[0].buyer_total>=offer.per_buyer_limit){await client.query('ROLLBACK');return c.json(reject('Your organisation has already used this offer the maximum number of times'),409);}
     discount=offer.discount_type==='FIXED_PAISE'?Number(offer.discount_value):Math.floor(subtotal*Number(offer.discount_value)/10000);
