@@ -24,6 +24,7 @@ import {createFinanceRoutes} from './finance-routes.js';
 import {createOfferRoutes} from './offer-routes.js';
 import {createLoyaltyRoutes} from './loyalty-routes.js';
 import {createNotificationRoutes} from './notification-routes.js';
+import {notifyOrganization} from './notification-service.js';
 type Context={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const loginSchema=z.object({email:z.string().email().max(254),password:z.string().min(1).max(1024),organizationId:z.string().uuid()});
 const orderSchema=z.object({
@@ -254,6 +255,8 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
     await insertGeoEvent(client,{...data.event,eventType:'LOYALTY_POINTS_REDEEMED',subjectType:'LOYALTY_ACCOUNT',subjectId:loyaltyAccountId},c.get('organizationId'),c.get('userId'));
    }
    await client.query('INSERT INTO slot_reservations(slot_id,delivery_date,order_id) VALUES($1,$2::date,$3)',[data.slotId,data.deliveryDate,orderId]);
+   await notifyOrganization(client,c.get('organizationId'),['CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER'],'ORDER','Order confirmed','Your FreshPrep order has been confirmed and is being prepared.','ORDER',orderId,'ORDER_CREATED:'+orderId,{orderId});
+   await notifyOrganization(client,kitchen.rows[0].producer_organization_id,['ADMIN','PROCUREMENT','SALES'],'ORDER','New customer order','A new customer order is ready for fulfilment.','ORDER',orderId,'NEW_ORDER:'+orderId,{orderId});
    await insertGeoEvent(client,{...data.event,subjectId:orderId},c.get('organizationId'),c.get('userId'));
    await client.query('COMMIT');return c.json({id:orderId,replayed:false},201);
   }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
