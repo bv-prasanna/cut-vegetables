@@ -16,6 +16,7 @@ type Fields=Record<string,string>;
 type Recurrence={id:string;state:string;frequency:string;start_date:string;weekdays:number[];slot_id:string};
 type SupportCase={id:string;case_number:number|string;order_id:string;category:string;description:string;requested_resolution:string|null;state:string;resolution_note:string|null;created_at:string};
 type SupportOrder={id:string;delivery_date:string;state:string};
+type MobileWallet={balancePoints:number;programActive:boolean;paisePerPoint:number|null;minimumRedeemPoints:number|null;maximumDiscountBps:number|null;entries:{entry_type:string;points_delta:number;note:string|null;created_at:string}[]};
 type PromotionPreview={code:string;name:string;discountType:'FIXED_PAISE'|'PERCENT_BPS';discountValue:number;maxDiscountPaise:number|null;minimumSubtotalPaise:number};
 type Mutation=ActionMutation;
 type Operation={
@@ -95,6 +96,7 @@ function AuthenticatedMobile(){
  const [supportCases,setSupportCases]=useState<SupportCase[]>([]),[supportOrders,setSupportOrders]=useState<SupportOrder[]>([]);
  const [supportOrderId,setSupportOrderId]=useState(''),[supportCategory,setSupportCategory]=useState('SHORTAGE');
  const [supportDescription,setSupportDescription]=useState(''),[supportResolution,setSupportResolution]=useState('');
+ const [mobileWallet,setMobileWallet]=useState<MobileWallet|null>(null),[loyaltyPointsToRedeem,setLoyaltyPointsToRedeem]=useState('');
  const [promotionCode,setPromotionCode]=useState(''),[promotionPreview,setPromotionPreview]=useState<PromotionPreview|null>(null),[promotionMessage,setPromotionMessage]=useState('');
  const screens=screenPermissions(identity?.roles||[]);
   useEffect(()=>{
@@ -168,10 +170,18 @@ function AuthenticatedMobile(){
   }catch(e){setError(e instanceof Error?e.message:'Unable to load this screen');}
   finally{setLoading(false);}
  },[call,screen,date,identity,session]);
+ useEffect(()=>{
+  if(screen!=='Place Order'||!kitchenId){setMobileWallet(null);return;}
+  let active=true;
+  void call<MobileWallet>('/v1/loyalty/me?kitchenId='+encodeURIComponent(kitchenId)).then(value=>{if(active)setMobileWallet(value);}).catch(()=>{if(active)setMobileWallet(null);});
+  return()=>{active=false;};
+ },[screen,kitchenId,call]);
  useEffect(()=>{void refresh();},[refresh]);
  const selected=Object.entries(cart).filter(([,g])=>g>0).map(([variantId,grams])=>({variantId,grams}));
  const filteredCuts=useMemo(()=>searchCuts(catalogue,catalogSearch),[catalogue,catalogSearch]);
  const cartInfo=useMemo(()=>basketTotals(cart,catalogue),[cart,catalogue]);
+ const requestedLoyaltyPoints=Math.max(0,Number(loyaltyPointsToRedeem)||0);
+ const loyaltyDiscountPaise=screen==='Place Order'&&mobileWallet?.programActive&&requestedLoyaltyPoints>=(mobileWallet.minimumRedeemPoints||1)&&requestedLoyaltyPoints<=mobileWallet.balancePoints?Math.min(requestedLoyaltyPoints*(mobileWallet.paisePerPoint||0),Math.floor(cartInfo.estimatedPaise*(mobileWallet.maximumDiscountBps||0)/10000),cartInfo.estimatedPaise):0;
  const promotionDiscountPaise=promotionPreview&&cartInfo.estimatedPaise>=promotionPreview.minimumSubtotalPaise?Math.min(promotionPreview.maxDiscountPaise??Number.MAX_SAFE_INTEGER,promotionPreview.discountType==='FIXED_PAISE'?promotionPreview.discountValue:Math.floor(cartInfo.estimatedPaise*promotionPreview.discountValue/10000),cartInfo.estimatedPaise):0;
  function increment(v:CatalogueVariant,sign:1|-1){
   setCart(old=>({...old,[v.id]:nextQuantity(old[v.id]||0,v.minimum_grams,v.increment_grams,sign)}));
@@ -191,17 +201,17 @@ function AuthenticatedMobile(){
   if(invalid){setError(invalid);Alert.alert('Review your order',invalid);return;}
   setLoading(true);setError('');
   try{
-   const fingerprint=JSON.stringify({order:fingerprintOrder(kitchenId,slotId,date,selected),promotionCode:promotionPreview&&cartInfo.estimatedPaise>=promotionPreview.minimumSubtotalPaise?promotionPreview.code:null});
+   const fingerprint=JSON.stringify({order:fingerprintOrder(kitchenId,slotId,date,selected),promotionCode:promotionPreview&&cartInfo.estimatedPaise>=promotionPreview.minimumSubtotalPaise?promotionPreview.code:null,loyaltyPoints:requestedLoyaltyPoints});
    if(!orderIntent.current||orderIntent.current.fingerprint!==fingerprint){
     orderIntent.current={fingerprint,key:'mobile-'+Date.now()+'-'+Math.random().toString(36).slice(2)};
    }
    const key=orderIntent.current.key;
    const ev=await captureEvent({title:'Order',path:'',method:'POST',fields:[],eventType:'ORDER_CREATED',subjectType:'ORDER'},key);
    const result=await call<{id:string;replayed?:boolean}>('/v1/orders','POST',{
-    kitchenId,slotId,deliveryDate:date,idempotencyKey:key,items:selected,promotionCode:promotionPreview&&cartInfo.estimatedPaise>=promotionPreview.minimumSubtotalPaise?promotionPreview.code:undefined,event:ev
+    kitchenId,slotId,deliveryDate:date,idempotencyKey:key,items:selected,promotionCode:promotionPreview&&cartInfo.estimatedPaise>=promotionPreview.minimumSubtotalPaise?promotionPreview.code:undefined,loyaltyPoints:requestedLoyaltyPoints||undefined,event:ev
    });
    orderIntent.current=null;
-   setCart({});setPromotionPreview(null);setPromotionCode('');setPromotionMessage('');Alert.alert('Order confirmed',result.replayed?'Existing order confirmed again: '+result.id:'Order reference: '+result.id);
+   setCart({});setPromotionPreview(null);setPromotionCode('');setPromotionMessage('');setLoyaltyPointsToRedeem('');Alert.alert('Order confirmed',result.replayed?'Existing order confirmed again: '+result.id:'Order reference: '+result.id);
    setScreen('Orders');
   }catch(e){setError(e instanceof Error?e.message:'Unable to submit order. Retry without changing your basket.');}
   finally{setLoading(false);}
@@ -352,6 +362,12 @@ function AuthenticatedMobile(){
     <View style={styles.row}><Btn text="Daily" secondary={frequency!=='DAILY'} onPress={()=>setFrequency('DAILY')}/><Btn text="Selected weekdays" secondary={frequency!=='WEEKLY'} onPress={()=>setFrequency('WEEKLY')}/></View>
     {frequency==='WEEKLY'&&<View style={styles.row}>{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day,index)=><Btn key={day} text={day} secondary={!weekdays.includes(index)} onPress={()=>setWeekdays(old=>old.includes(index)?old.filter(x=>x!==index):[...old,index])}/>)}</View>}
    </>}
+   {screen==='Place Order'&&mobileWallet?.programActive&&<View style={styles.card}>
+    <Text style={styles.heading}>Redeem rewards</Text>
+    <Text style={styles.muted}>{mobileWallet.balancePoints} points available · {((mobileWallet.paisePerPoint||0)/100).toFixed(2)} ₹ per point</Text>
+    <Input title="Points to redeem" value={loyaltyPointsToRedeem} onChange={setLoyaltyPointsToRedeem}/>
+    {loyaltyDiscountPaise>0&&<Text style={styles.value}>Estimated loyalty discount ₹{(loyaltyDiscountPaise/100).toFixed(2)}</Text>}
+   </View>}
    {screen==='Place Order'&&<View style={styles.card}>
     <Text style={styles.heading}>Offer code</Text>
     <Input title="Enter coupon code" value={promotionCode} onChange={v=>{setPromotionCode(v.toUpperCase());setPromotionPreview(null);setPromotionMessage('');}}/>
@@ -359,7 +375,7 @@ function AuthenticatedMobile(){
     {!!promotionMessage&&<Text style={styles.muted}>{promotionMessage}</Text>}
     {promotionPreview&&promotionDiscountPaise>0&&<Text style={styles.value}>Validated: {promotionPreview.code} · estimated discount ₹{(promotionDiscountPaise/100).toFixed(2)}</Text>}
    </View>}
-   <Text style={styles.item}>{cartInfo.itemCount} items · {kg(cartInfo.totalGrams)} · estimated ₹{((cartInfo.estimatedPaise-promotionDiscountPaise)/100).toFixed(2)}{promotionDiscountPaise>0?' · offer −₹'+(promotionDiscountPaise/100).toFixed(2):''}</Text>
+   <Text style={styles.item}>{cartInfo.itemCount} items · {kg(cartInfo.totalGrams)} · estimated ₹{((cartInfo.estimatedPaise-promotionDiscountPaise-loyaltyDiscountPaise)/100).toFixed(2)}{promotionDiscountPaise>0?' · offer −₹'+(promotionDiscountPaise/100).toFixed(2):''}{loyaltyDiscountPaise>0?' · rewards −₹'+(loyaltyDiscountPaise/100).toFixed(2):''}</Text>
    {identity.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))&&
     <Btn text={screen==='Recurring'?'Create recurring schedule':'Submit confirmed order'} disabled={loading} onPress={()=>screen==='Recurring'?void placeRecurrence():void placeOrder()}/>}
    {screen==='Recurring'&&<><Text style={styles.heading}>Saved schedules</Text>
