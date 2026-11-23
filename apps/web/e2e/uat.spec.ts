@@ -39,6 +39,10 @@ async function mockApi(page:Page,roles:string[]|null){
   if(p==='/v1/quotes')return ok(mockQuote?[mockQuote]:[]);
   if(p==='/v1/support/cases'&&req.method()==='POST')return ok({id:'77777777-7777-4777-8777-777777777777',caseNumber:1},201);
   if(p==='/v1/support/cases')return ok([]);
+  if(p==='/v1/finance/invoices')return ok([]);
+  if(p==='/v1/finance/ready-orders')return ok([]);
+  if(p==='/v1/finance/summary')return ok({invoices:{invoice_count:0,invoiced_paise:0,outstanding_paise:0},receipts:{received_paise:0,receipt_count:0},credits:{approved_credit_paise:0},taxInvoiceIssuingEnabled:false});
+
   if(p.startsWith('/v1/quotes/')&&p.endsWith('/accept'))return ok({id:'99999999-9999-4999-8999-999999999998',replayed:false},201);
   if(p.startsWith('/v1/quotes/')&&p.endsWith('/reject'))return ok({ok:true});
   if(p==='/v1/kitchens')return ok([{id:KITCHEN,name:'UAT Kitchen',address:'Bengaluru test address',zone_code:'BENGALURU_TEST'}]);
@@ -144,6 +148,21 @@ test('admin support workspace loads its queue and protects decision controls',as
  await expect(page.locator('#workspace-content').getByRole('heading',{name:'Complaints, shortages & returns'})).toBeVisible();
  await expect(page.getByText('No cases in this view')).toBeVisible();
  await expect(page.getByLabel('Case status')).toBeVisible();
+});
+test('finance: role-scoped invoices and collections workspace renders safely',async({page},info)=>{
+ await mockApi(page,['FINANCE']);
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/');await signin(page);
+ const nav=page.getByRole('navigation',{name:'Workspace navigation'});
+ await expect(nav.getByRole('button',{name:'Finance'})).toBeVisible();
+ await expect(nav.getByRole('button',{name:'Overview'})).toHaveCount(0);
+ await nav.getByRole('button',{name:'Finance'}).click();
+ await expect(page.locator('#workspace-content').getByRole('heading',{name:'Invoices, collections & credits'})).toBeVisible();
+ await expect(page.getByText('Tax control:')).toBeVisible();
+ await expect(page.getByText('No delivered orders are waiting for an invoice.')).toBeVisible();
+ await expect(errors).toEqual([]);
+ await assertNoHorizontalOverflow(page);
+ await page.screenshot({path:info.outputPath('finance-workspace.png'),fullPage:true});
 });
 test('customer: role-scoped buying catalogue has no admin overview or staff controls',async({page},info)=>{
  await mockApi(page,['CUSTOMER_BUYER']);
