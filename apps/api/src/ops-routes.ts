@@ -318,8 +318,10 @@ export function createOperationsRoutes(pool:Pool){
      }
     }
    }
-   await notifyOrganization(tx,stop.buyer_organization_id,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'DELIVERY','Order delivered','Your FreshPrep order has been delivered. Please review the items and contact support if anything is missing.','ORDER',stop.order_id,'ORDER_DELIVERED:'+stop.order_id,{orderId:stop.order_id});
-   if(programPointsEarned>0)await notifyOrganization(tx,stop.buyer_organization_id,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'LOYALTY','Loyalty points added','Points have been added to your rewards wallet after delivery.','ORDER',stop.order_id,'LOYALTY_EARNED:'+stop.order_id,{orderId:stop.order_id,points:programPointsEarned});
+   if(delivered.rowCount){
+    await notifyOrganization(tx,stop.buyer_organization_id,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'DELIVERY','Order delivered','Your FreshPrep order has been delivered. Please review the items and contact support if anything is missing.','ORDER',stop.order_id,'ORDER_DELIVERED:'+stop.order_id,{orderId:stop.order_id});
+    if(programPointsEarned>0)await notifyOrganization(tx,stop.buyer_organization_id,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'LOYALTY','Loyalty points added','Points have been added to your rewards wallet after delivery.','ORDER',stop.order_id,'LOYALTY_EARNED:'+stop.order_id,{orderId:stop.order_id,points:programPointsEarned});
+   }
    return {proofId:proof.rows[0].id,orderId:stop.order_id};
   });
   return c.json(data,201);
