@@ -37,10 +37,10 @@ The percentages below are engineering estimates of implemented functionality, no
 | Marketing CMS (slides and announcements) | 75% | 75% | 0% | 80% | Edit workflow, audience/zone targeting, approval/publish separation |
 | Offers, coupons and loyalty | 70% | 65% | 55% | 80% | Expiry and breakage, loyalty redemption policy approval, legacy ledger conversion and promotion analytics |
 | Finance, GST, invoices and payments | 40% | 40% | 30% | 75% | GST profile and tax invoice issuance, refunds, gateway/bank reconciliation, aging and finance reports |
-| Notifications, support, complaints and returns | 45% | 55% | 50% | 65% | Consent, delivery channels/status, refund execution, substitution approval, return pickup and SLA escalation |
+| Notifications, support, complaints and returns | 65% | 65% | 60% | 80% | Email/SMS/push delivery, refund execution, substitution approval, return pickup and SLA escalation |
 | Deployment, backup and release | 40% | 30% | 20% | 25% | Real staging, secret configuration, signed APK, backup/restore, monitoring and rollback |
 
-**Overall estimate (24 Nov 2026):** core order-to-delivery remains approximately 90% backend, 80% web, 85% mobile and 90% automated integration. Full BRD v3 scope is approximately **72–76%** after support, finance, offers and loyalty work. This is an engineering estimate, not a measured test-coverage score or customer acceptance certificate. The full product is not at 98% yet.
+**Overall estimate (24 Nov 2026):** core order-to-delivery remains approximately 90% backend, 80% web, 85% mobile and 90% automated integration. Full BRD v3 scope is approximately **74–78%** after support, finance, offers, loyalty and in-app notification work. This is an engineering estimate, not a measured test-coverage score or customer acceptance certificate. The full product is not at 98% yet.
 
 ## Work completed in the latest implementation batches
 
@@ -59,6 +59,8 @@ The percentages below are engineering estimates of implemented functionality, no
 - Loyalty: finance-configured and approved programme rates, points earned only after verified delivery, customer wallet and ledger on web/mobile, points redemption at checkout, balance and per-order cap enforcement, idempotent manual adjustments, and automatic point reversal when an eligible order is cancelled.
 - Migrations 0015–0016 preserve the older single-organisation offer/loyalty tables as `legacy_offer_redemptions`, `legacy_loyalty_accounts`, and `legacy_loyalty_ledger`; historical rows have not yet been mapped into the new supplier/customer scoped model and require a reviewed conversion plan.
 - Latest CI run 45259257726 passed 4/4 jobs: API/Web, PostgreSQL lifecycle/negative tests, Expo mobile, and Chromium browser UAT.
+- Notifications: new user-scoped inbox and category preferences, read/unread state, unread filtering, mark-all-read and tenant-safe recipient delivery. Transactional notifications are emitted for order confirmation, support case creation/status, verified delivery, loyalty awards, provisional invoices, receipts and approved credit notes. Web and mobile inboxes are available. Email, SMS and push providers are not connected; these remain explicit release gaps.
+- Latest CI run 45260866295 passed 4/4 jobs: API/Web, PostgreSQL migrations and lifecycle/negative tests, Expo mobile, and Chromium browser UAT.
 
 ## Completion sequence
 
