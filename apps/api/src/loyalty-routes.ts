@@ -50,7 +50,7 @@ export function createLoyaltyRoutes(pool:Pool){
   const producer=kitchen.rows[0].producer_organization_id;
   const program=await pool.query("SELECT paise_per_point,minimum_redeem_points,maximum_discount_bps FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE'",[producer]);
   const account=await pool.query('SELECT id,balance_points,updated_at FROM loyalty_accounts WHERE producer_organization_id=$1 AND buyer_organization_id=$2',[producer,c.get('organizationId')]);
-  const programFields={programActive:program.rowCount>0,paisePerPoint:program.rowCount?Number(program.rows[0].paise_per_point):null,minimumRedeemPoints:program.rowCount?Number(program.rows[0].minimum_redeem_points):null,maximumDiscountBps:program.rowCount?Number(program.rows[0].maximum_discount_bps):null};
+  const programFields={programActive:program.rows.length>0,paisePerPoint:program.rowCount?Number(program.rows[0].paise_per_point):null,minimumRedeemPoints:program.rowCount?Number(program.rows[0].minimum_redeem_points):null,maximumDiscountBps:program.rowCount?Number(program.rows[0].maximum_discount_bps):null};
   if(!account.rowCount)return c.json({balancePoints:0,entries:[],...programFields});
   const entries=await pool.query('SELECT entry_type,points_delta,note,created_at FROM loyalty_ledger WHERE account_id=$1 ORDER BY created_at DESC LIMIT 100',[account.rows[0].id]);
   return c.json({balancePoints:Number(account.rows[0].balance_points),updatedAt:account.rows[0].updated_at,entries:entries.rows.map(row=>({...row,points_delta:Number(row.points_delta)})),...programFields});
@@ -62,7 +62,7 @@ export function createLoyaltyRoutes(pool:Pool){
  });
  app.post('/admin/loyalty/adjustments',async c=>{
   permission(c.get('roles'),'loyalty:review');
-  const d=parse(await c.req.json().catch(()=>null),z.object({buyerOrganizationId:z.string().uuid(),pointsDelta:z.number().int().refine(v=>v!==0).max(1000000).min(-1000000),idempotencyKey:z.string().min(8).max(120),note:z.string().trim().min(5).max(500)}));
+  const d=parse(await c.req.json().catch(()=>null),z.object({buyerOrganizationId:z.string().uuid(),pointsDelta:z.number().int().min(-1000000).max(1000000).refine(v=>v!==0),idempotencyKey:z.string().min(8).max(120),note:z.string().trim().min(5).max(500)}));
   const row=await inTransaction(pool,async tx=>{
    const program=await tx.query("SELECT id FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE'",[c.get('organizationId')]);
    if(!program.rowCount)throw new BusinessFailure(409,'An approved active loyalty program is required');
