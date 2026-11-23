@@ -10,7 +10,7 @@ const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v=>{try{localDate(v);r
 const receiptInput=z.object({
  buyerOrganizationId:uuid,amountPaise:z.number().int().positive().max(100_000_000_000),
  paymentMethod:z.enum(['UPI','BANK_TRANSFER','CASH','CHEQUE','CARD','OTHER']),
- reference:z.string().trim().max(120).optional(),receivedOn:date,note:z.string().trim().max(500).optional(),
+ reference:z.string().trim().min(4).max(120),receivedOn:date,note:z.string().trim().max(500).optional(),
  allocations:z.array(z.object({invoiceId:uuid,amountPaise:z.number().int().positive()})).max(100).default([])
 });
 const creditInput=z.object({amountPaise:z.number().int().positive(),reason:z.string().trim().min(5).max(500)});
@@ -65,7 +65,7 @@ export function createFinanceRoutes(pool:Pool){
   const result=await inTransaction(pool,async tx=>{
    const buyer=await tx.query('SELECT id FROM organizations WHERE id=$1 AND kind=\'CUSTOMER\'',[d.buyerOrganizationId]);
    if(!buyer.rowCount)throw new BusinessFailure(422,'Select a valid customer organisation');
-   if(d.reference){const duplicate=await tx.query('SELECT id FROM finance_receipts WHERE producer_organization_id=$1 AND reference=$2',[c.get('organizationId'),d.reference]);if(duplicate.rowCount)throw new BusinessFailure(409,'This payment reference has already been recorded');}
+   const duplicate=await tx.query('SELECT id FROM finance_receipts WHERE producer_organization_id=$1 AND reference=$2',[c.get('organizationId'),d.reference]);if(duplicate.rowCount)throw new BusinessFailure(409,'This payment reference has already been recorded');
    const receipt=await tx.query('INSERT INTO finance_receipts(producer_organization_id,buyer_organization_id,amount_paise,payment_method,reference,received_on,note,created_by) VALUES($1,$2,$3,$4,$5,$6::date,$7,$8) RETURNING id,receipt_number,amount_paise',[c.get('organizationId'),d.buyerOrganizationId,d.amountPaise,d.paymentMethod,d.reference??null,d.receivedOn,d.note??null,c.get('userId')]);
    let allocated=0;
    for(const a of d.allocations){
@@ -87,7 +87,8 @@ export function createFinanceRoutes(pool:Pool){
   const result=await inTransaction(pool,async tx=>{
    const invoice=await tx.query('SELECT id,total_paise FROM finance_invoices WHERE id=$1 AND producer_organization_id=$2 FOR UPDATE',[invoiceId,c.get('organizationId')]);
    if(!invoice.rowCount)throw new BusinessFailure(404,'Invoice not found');
-   const [paid,credits]=await Promise.all([tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_allocations WHERE invoice_id=$1',[invoiceId]),tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_credit_notes WHERE invoice_id=$1 AND status<>\'VOID\'',[invoiceId])]);
+   const paid=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_allocations WHERE invoice_id=$1',[invoiceId]);
+   const credits=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_credit_notes WHERE invoice_id=$1 AND status<>'VOID'',[invoiceId]);
    if(d.amountPaise>Number(invoice.rows[0].total_paise)-Number(paid.rows[0].n)-Number(credits.rows[0].n))throw new BusinessFailure(409,'Credit note exceeds the remaining invoice balance');
    const row=await tx.query('INSERT INTO finance_credit_notes(invoice_id,amount_paise,reason,created_by) VALUES($1,$2,$3,$4) RETURNING id,credit_number,status,amount_paise',[invoiceId,d.amountPaise,d.reason,c.get('userId')]);
    await recordEvent(tx,c.get('organizationId'),c.get('userId'),systemEvent('CREDIT_NOTE_DRAFTED','CREDIT_NOTE',row.rows[0].id),'CREDIT_NOTE_DRAFTED','CREDIT_NOTE',row.rows[0].id);return row.rows[0];
