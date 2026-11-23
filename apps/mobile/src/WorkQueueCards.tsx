@@ -18,6 +18,18 @@ const Panel=({children}:{children:React.ReactNode})=><View style={styles.card}>{
 const Head=({title,subtitle}:{title:string;subtitle?:string})=><View style={styles.cardHead}><Text style={styles.title}>{title}</Text>{Boolean(subtitle)&&<Text style={styles.subtitle}>{subtitle}</Text>}</View>;
 const Cell=({title,value}:{title:string;value:string})=><View style={styles.cell}><Text style={styles.label}>{title}</Text><Text style={styles.value}>{value}</Text></View>;
 export default function WorkQueueCards({screen,rows,loading}:Props){
+ if(screen==='Notifications'){
+  return <><Text style={styles.sectionTitle}>Your notifications</Text>
+   {rows.map((value,i)=>{const r=rowOf(value);return <Panel key={String(r.id??i)}>
+    <View style={styles.topRow}><View style={styles.grow}><Text style={styles.kicker}>{textOf(r.category,'SYSTEM')} · {r.read_at?'READ':'UNREAD'}</Text>
+     <Text style={styles.title}>{textOf(r.title,'Account update')}</Text>
+     <Text style={styles.subtitle}>{textOf(r.body)}</Text>
+     <Text style={styles.hint}>{textOf(r.created_at).slice(0,16).replace('T',' ')}</Text>
+    </View><Status value={r.read_at?'READ':'NEW'}/></View>
+   </Panel>})}
+   {!rows.length&&<View style={styles.empty}><Text style={styles.subtitle}>You are all caught up.</Text></View>}
+  </>;
+ }
  if(screen==='Wallet'){
   const account=rowOf(rows[0]),entries=Array.isArray(account.entries)?account.entries:[];
   return <><Panel><Head title="Your rewards wallet" subtitle="Points are earned after successful delivery when the supplier programme is active."/>
