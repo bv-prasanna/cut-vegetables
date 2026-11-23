@@ -101,3 +101,14 @@
 .fp-customer-promotion button{border:0;border-radius:8px;padding:10px 13px;background:#1b704d;color:white;font-weight:750;cursor:pointer}
 .fp-customer-promotion button:disabled{opacity:.55;cursor:not-allowed}
 .fp-customer-promotion small{grid-column:1/-1;color:#54725d;font-size:11px;line-height:1.4}
+
+
+.fp-customer-wallet{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:18px;align-items:center;padding:18px;border:1px solid #dce9df;border-radius:15px;background:linear-gradient(135deg,#f4faf4,#fff)}
+.fp-customer-wallet>div:first-child>span{font-size:10px;letter-spacing:.14em;font-weight:850;color:#4b8060}
+.fp-customer-wallet h3{margin:6px 0;font-size:17px}
+.fp-customer-wallet strong{display:block;font-size:28px;letter-spacing:-.04em;color:#176b4b}
+.fp-customer-wallet p{font-size:12px;line-height:1.5;color:#718078;margin:7px 0 0}
+.fp-customer-wallet-ledger{display:grid;gap:7px}
+.fp-customer-wallet-ledger article{display:grid;grid-template-columns:1fr auto;gap:3px 12px;padding:8px 10px;background:white;border:1px solid #e5eee7;border-radius:9px}
+.fp-customer-wallet-ledger b{font-size:11px}.fp-customer-wallet-ledger span{font-size:12px;font-weight:800;color:#26704a}.fp-customer-wallet-ledger small{grid-column:1/-1;font-size:10px;color:#829087}
+@media(max-width:720px){.fp-customer-wallet{grid-template-columns:1fr}}
