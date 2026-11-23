@@ -1,6 +1,6 @@
 -- Offers and loyalty ledger. Program rates are disabled until explicitly configured and approved.
 BEGIN;
-CREATE TABLE customer_offers (
+CREATE TABLE IF NOT EXISTS customer_offers (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  producer_organization_id uuid NOT NULL REFERENCES organizations(id),
  code text NOT NULL,
@@ -23,8 +23,8 @@ CREATE TABLE customer_offers (
  CHECK(ends_at>starts_at),
  CHECK(discount_type<>'PERCENT_BPS' OR discount_value<=10000)
 );
-CREATE INDEX customer_offers_active_idx ON customer_offers(producer_organization_id,status,starts_at,ends_at);
-CREATE TABLE offer_redemptions (
+CREATE INDEX IF NOT EXISTS customer_offers_active_idx ON customer_offers(producer_organization_id,status,starts_at,ends_at);
+CREATE TABLE IF NOT EXISTS offer_redemptions (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  offer_id uuid NOT NULL REFERENCES customer_offers(id),
  producer_organization_id uuid NOT NULL REFERENCES organizations(id),
@@ -34,9 +34,9 @@ CREATE TABLE offer_redemptions (
  redeemed_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(offer_id,order_id)
 );
-CREATE INDEX offer_redemptions_buyer_idx ON offer_redemptions(offer_id,buyer_organization_id);
-ALTER TABLE orders ADD COLUMN promotion_id uuid REFERENCES customer_offers(id);
-CREATE TABLE loyalty_programs (
+CREATE INDEX IF NOT EXISTS offer_redemptions_buyer_idx ON offer_redemptions(offer_id,buyer_organization_id);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS promotion_id uuid REFERENCES customer_offers(id);
+CREATE TABLE IF NOT EXISTS loyalty_programs (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  producer_organization_id uuid NOT NULL UNIQUE REFERENCES organizations(id),
  points_per_100_rupees integer NOT NULL CHECK(points_per_100_rupees>0),
@@ -50,7 +50,7 @@ CREATE TABLE loyalty_programs (
  updated_at timestamptz NOT NULL DEFAULT now(),
  CHECK((status='ACTIVE' AND approved_by IS NOT NULL AND approved_at IS NOT NULL) OR status<>'ACTIVE')
 );
-CREATE TABLE loyalty_accounts (
+CREATE TABLE IF NOT EXISTS loyalty_accounts (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  producer_organization_id uuid NOT NULL REFERENCES organizations(id),
  buyer_organization_id uuid NOT NULL REFERENCES organizations(id),
@@ -58,7 +58,7 @@ CREATE TABLE loyalty_accounts (
  updated_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(producer_organization_id,buyer_organization_id)
 );
-CREATE TABLE loyalty_ledger (
+CREATE TABLE IF NOT EXISTS loyalty_ledger (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  account_id uuid NOT NULL REFERENCES loyalty_accounts(id),
  entry_type text NOT NULL CHECK(entry_type IN ('EARN','REDEEM','REVERSAL','EXPIRY','ADJUSTMENT')),
@@ -70,5 +70,5 @@ CREATE TABLE loyalty_ledger (
  created_at timestamptz NOT NULL DEFAULT now(),
  UNIQUE(account_id,idempotency_key)
 );
-CREATE INDEX loyalty_ledger_account_idx ON loyalty_ledger(account_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS loyalty_ledger_account_idx ON loyalty_ledger(account_id,created_at DESC);
 COMMIT;
