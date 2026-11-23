@@ -16,7 +16,7 @@ type Created={organizationId:string;kitchenId:string};
 suite('real PostgreSQL UAT and negative flows',()=>{
  let pool:Pool;
  let app:ReturnType<typeof createProductionApp>;
- let adminToken='',customerToken='',customerOrg='',kitchenId='',slotId='',variantId='',grams=500,deliveryDate='',producerOrg='',orderId='',contractId='',basePrice=0,minimumGrams=0,incrementGrams=0,quoteVariantId='',quoteGrams=0,quoteBasePrice=0,quoteMinimum=0,quoteIncrement=0,quoteId='';
+ let adminToken='',financeToken='',customerToken='',customerOrg='',kitchenId='',slotId='',variantId='',grams=500,deliveryDate='',producerOrg='',orderId='',contractId='',basePrice=0,minimumGrams=0,incrementGrams=0,quoteVariantId='',quoteGrams=0,quoteBasePrice=0,quoteMinimum=0,quoteIncrement=0,quoteId='';
  const event={eventType:'ORDER_CREATED',subjectType:'ORDER',subjectId:'pending',
   location:{source:'UNAVAILABLE',unavailableReason:'CI cannot read device GPS',consentStatus:'NOT_REQUESTED'},
   details:{client:'ci-integration'}};
@@ -246,6 +246,23 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect((await request('/v1/admin/variants','POST',{sku:'FAKE-FOOD'},customerToken)).status).toBe(403);
  });
 
+ it('configures and approves a loyalty program before order fulfilment',async()=>{
+  const email='uat-finance@example.invalid',password='Finance-ci-secret-123456';
+  const created=await request('/v1/admin/staff','POST',{email,password,roles:['FINANCE']});
+  expect(created.status).toBe(201);
+  const login=await request('/auth/login','POST',{email,password,organizationId:producerOrg},'');
+  expect(login.status).toBe(200);
+  financeToken=(await login.json() as Login).accessToken;
+  const saved=await request('/v1/admin/loyalty/program','PUT',{
+   pointsPer100Rupees:10,paisePerPoint:10,minimumRedeemPoints:1,maximumDiscountBps:1000
+  },financeToken);
+  expect(saved.status).toBe(200);
+  expect(await saved.json()).toMatchObject({status:'DRAFT'});
+  expect((await request('/v1/admin/loyalty/program/approve','PATCH',{},financeToken)).status).toBe(200);
+  const wallet=await request('/v1/loyalty/me?kitchenId='+kitchenId,'GET',undefined,customerToken);
+  expect(wallet.status).toBe(200);
+  expect(await wallet.json()).toMatchObject({balancePoints:0,programActive:true});
+ });
  it('executes and audits procurement → cutter → QC → packer → dispatch → assigned-driver POD',async()=>{
   expect(orderId).toBeTruthy();
   const actorRoles=['PROCUREMENT','OPERATOR','QC','PACKER','DISPATCH','DRIVER'] as const;
@@ -416,12 +433,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
  });
 
  it('creates provisional invoices and enforces receipt allocation and credit-note limits',async()=>{
-  const email='uat-finance@example.invalid',password='Finance-ci-secret-123456';
-  const created=await request('/v1/admin/staff','POST',{email,password,roles:['FINANCE']});
-  expect(created.status).toBe(201);
-  const login=await request('/auth/login','POST',{email,password,organizationId:producerOrg},'');
-  expect(login.status).toBe(200);
-  const financeToken=(await login.json() as Login).accessToken;
+  expect(financeToken).toBeTruthy();
   const invoiceResponse=await request('/v1/finance/invoices/from-order/'+orderId,'POST',{},financeToken);
   expect(invoiceResponse.status).toBe(201);
   const invoice=await invoiceResponse.json() as {id:string;total_paise:number;status:string;tax_policy_status:string};
