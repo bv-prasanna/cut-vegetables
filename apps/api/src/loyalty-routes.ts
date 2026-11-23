@@ -52,7 +52,7 @@ export function createLoyaltyRoutes(pool:Pool){
   if(!account.rowCount)return c.json({balancePoints:0,entries:[],programActive:(await pool.query("SELECT 1 FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE'",[producer])).rowCount>0});
   const entries=await pool.query('SELECT entry_type,points_delta,note,created_at FROM loyalty_ledger WHERE account_id=$1 ORDER BY created_at DESC LIMIT 100',[account.rows[0].id]);
   const active=await pool.query("SELECT 1 FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE'",[producer]);
-  return c.json({balancePoints:account.rows[0].balance_points,updatedAt:account.rows[0].updated_at,entries:entries.rows,programActive:active.rowCount>0});
+  return c.json({balancePoints:Number(account.rows[0].balance_points),updatedAt:account.rows[0].updated_at,entries:entries.rows.map(row=>({...row,points_delta:Number(row.points_delta)})),programActive:active.rowCount>0});
  });
  app.get('/admin/loyalty/accounts',async c=>{
   permission(c.get('roles'),'loyalty:review');
@@ -70,7 +70,7 @@ export function createLoyaltyRoutes(pool:Pool){
    await tx.query('INSERT INTO loyalty_accounts(producer_organization_id,buyer_organization_id) VALUES($1,$2) ON CONFLICT(producer_organization_id,buyer_organization_id) DO NOTHING',[c.get('organizationId'),d.buyerOrganizationId]);
    const account=await tx.query('SELECT id,balance_points FROM loyalty_accounts WHERE producer_organization_id=$1 AND buyer_organization_id=$2 FOR UPDATE',[c.get('organizationId'),d.buyerOrganizationId]);
    const prior=await tx.query('SELECT id,points_delta FROM loyalty_ledger WHERE account_id=$1 AND idempotency_key=$2',[account.rows[0].id,d.idempotencyKey]);
-   if(prior.rowCount)return {id:prior.rows[0].id,balancePoints:account.rows[0].balance_points,replayed:true};
+   if(prior.rowCount)return {id:prior.rows[0].id,balancePoints:Number(account.rows[0].balance_points),replayed:true};
    const next=Number(account.rows[0].balance_points)+d.pointsDelta;
    if(next<0)throw new BusinessFailure(409,'Adjustment would make the customer points balance negative');
    const entry=await tx.query("INSERT INTO loyalty_ledger(account_id,entry_type,points_delta,idempotency_key,note,created_by) VALUES($1,'ADJUSTMENT',$2,$3,$4,$5) RETURNING id",[account.rows[0].id,d.pointsDelta,d.idempotencyKey,d.note,c.get('userId')]);
