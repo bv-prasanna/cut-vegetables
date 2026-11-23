@@ -35,6 +35,15 @@ export function createOrderLifecycleRoutes(pool:Pool,clock:()=>Date=()=>new Date
    await tx.query("UPDATE orders SET state='CANCELLED' WHERE id=$1 AND organization_id=$2",[id,org]);
    await tx.query('DELETE FROM slot_reservations WHERE order_id=$1',[id]);
    await tx.query('UPDATE offer_redemptions SET reversed_at=now() WHERE order_id=$1 AND reversed_at IS NULL',[id]);
+   const redemption=await tx.query("SELECT id,account_id,points_delta FROM loyalty_ledger WHERE order_id=$1 AND entry_type='REDEEM' FOR UPDATE",[id]);
+   if(redemption.rowCount){
+    const entry=redemption.rows[0],points=Math.abs(Number(entry.points_delta));
+    const reversal=await tx.query("INSERT INTO loyalty_ledger(account_id,entry_type,points_delta,order_id,idempotency_key,note,created_by) VALUES($1,'REVERSAL',$2,$3,$4,'Redeemed points returned after order cancellation',$5) ON CONFLICT(account_id,idempotency_key) DO NOTHING RETURNING id",[entry.account_id,points,id,'REVERSAL:'+id,c.get('userId')]);
+    if(reversal.rowCount){
+     await tx.query('UPDATE loyalty_accounts SET balance_points=balance_points+$2,updated_at=now() WHERE id=$1',[entry.account_id,points]);
+     await recordEvent(tx,org,c.get('userId'),systemEvent('LOYALTY_POINTS_REVERSED','LOYALTY_ACCOUNT',entry.account_id),'LOYALTY_POINTS_REVERSED','LOYALTY_ACCOUNT',entry.account_id);
+    }
+   }
    await recordEvent(tx,org,c.get('userId'),body.data.event??systemEvent('ORDER_CANCELLED','ORDER',id),'ORDER_CANCELLED','ORDER',id);
    return {id,state:'CANCELLED',replayed:false};
   });
