@@ -3,6 +3,7 @@ import {z} from 'zod';
 import type {Pool} from 'pg';
 import {canAny,type Role} from './authorization.js';
 import {BusinessFailure,inTransaction,recordEvent,systemEvent,respondError} from './ops-db.js';
+import {notifyOrganization} from './notification-service.js';
 import {localDate} from './scheduling.js';
 type Env={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const uuid=z.string().uuid();
@@ -54,6 +55,7 @@ export function createFinanceRoutes(pool:Pool){
     [c.get('organizationId'),o.organization_id,orderId,o.subtotal_paise,o.delivery_fee_paise,o.discount_paise??0,o.total_paise,JSON.stringify({source:'DELIVERED_ORDER',pricing:o.pricing_snapshot,documentNotice:'PROVISIONAL — NOT A GST TAX INVOICE; tax policy approval required'}),c.get('userId')]);
    const invoice=inserted.rows[0];
    await recordEvent(tx,c.get('organizationId'),c.get('userId'),systemEvent('PROVISIONAL_INVOICE_CREATED','INVOICE',invoice.id),'PROVISIONAL_INVOICE_CREATED','INVOICE',invoice.id);
+   await notifyOrganization(tx,o.organization_id,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'FINANCE','Invoice prepared','A provisional invoice is available for your delivered order.','INVOICE',invoice.id,'PROVISIONAL_INVOICE:'+invoice.id,{invoiceNumber:invoice.invoice_number});
    return {...invoice,replayed:false};
   });
   return c.json(result,result.replayed?200:201);
