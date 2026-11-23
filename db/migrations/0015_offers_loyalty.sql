@@ -2,13 +2,8 @@
 BEGIN;
 -- 0002_marketing.sql created a legacy offer_redemptions table for the retired offer model.
 -- Preserve its history under an explicit legacy name before creating the buyer/supplier-scoped ledger.
-DO $
-BEGIN
- IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='offer_redemptions' AND column_name='organization_id')
-    AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='offer_redemptions' AND column_name='buyer_organization_id') THEN
-  ALTER TABLE offer_redemptions RENAME TO legacy_offer_redemptions;
- END IF;
-END $;
+ALTER TABLE offer_redemptions RENAME TO legacy_offer_redemptions;
+
 CREATE TABLE IF NOT EXISTS customer_offers (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  producer_organization_id uuid NOT NULL REFERENCES organizations(id),
