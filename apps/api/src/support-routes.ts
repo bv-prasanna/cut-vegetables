@@ -41,7 +41,7 @@ export function createSupportRoutes(pool:Pool){
    const q=await tx.query('INSERT INTO support_cases(buyer_organization_id,producer_organization_id,order_id,kitchen_id,category,description,requested_resolution,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,case_number,order_id,category,state,created_at',[org,producer,orderId,order.rows[0].kitchen_id,category,description,requestedResolution??null,c.get('userId')]);
    const row=q.rows[0] as {id:string};
    await recordEvent(tx,org,c.get('userId'),event,'SUPPORT_CASE_CREATED','SUPPORT_CASE',row.id);
-   await notifyOrganization(tx,producer,['ADMIN','SALES'],'SUPPORT','New customer support case','A customer has reported an order issue requiring review.','SUPPORT_CASE',row.id,'SUPPORT_CASE_CREATED:'+row.id,{caseNumber:q.rows[0].case_number,category});
+   await notifyOrganization(tx,producer,['SUPERADMIN','ADMIN','SALES'],'SUPPORT','New customer support case','A customer has reported an order issue requiring review.','SUPPORT_CASE',row.id,'SUPPORT_CASE_CREATED:'+row.id,{caseNumber:q.rows[0].case_number,category});
    await notifyOrganization(tx,org,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'SUPPORT','Support request received','Your support request has been recorded. You can track its progress here.','SUPPORT_CASE',row.id,'SUPPORT_CASE_RECEIVED:'+row.id,{caseNumber:q.rows[0].case_number});
    return q.rows[0];
   });
