@@ -45,6 +45,10 @@ async function mockApi(page:Page,roles:string[]|null){
   if(p==='/v1/admin/loyalty/program')return ok(null);
   if(p==='/v1/admin/loyalty/accounts')return ok([]);
   if(p==='/v1/loyalty/me')return ok({balancePoints:45,programActive:true,paisePerPoint:10,minimumRedeemPoints:1,maximumDiscountBps:1000,entries:[{entry_type:'EARN',points_delta:45,note:'UAT delivery reward',created_at:'2026-11-24T00:00:00.000Z'}]});
+  if(p==='/v1/notifications'&&req.method()==='GET')return ok({items:[{id:'88888888-8888-4888-8888-888888888888',category:'ORDER',title:'Order confirmed',body:'Your order is confirmed.',subject_type:'ORDER',subject_id:'uat-order',created_at:'2026-11-24T00:00:00.000Z',read_at:null}],unreadCount:1});
+  if(p==='/v1/notifications/preferences'&&req.method()==='GET')return ok([]);
+  if(p==='/v1/notifications/read-all'||p.startsWith('/v1/notifications/'))return ok({id:'88888888-8888-4888-8888-888888888888',read_at:'2026-11-24T00:01:00.000Z'});
+  if(p.startsWith('/v1/notifications/preferences/'))return ok({category:'ORDER',in_app_enabled:true});
   if(p==='/v1/promotions/validate')return ok({code:'WELCOME10',name:'Welcome offer',discountType:'PERCENT_BPS',discountValue:1000,maxDiscountPaise:1000,minimumSubtotalPaise:0});
 
   if(p.startsWith('/v1/quotes/')&&p.endsWith('/accept'))return ok({id:'99999999-9999-4999-8999-999999999998',replayed:false},201);
@@ -152,6 +156,16 @@ test('admin support workspace loads its queue and protects decision controls',as
  await expect(page.locator('#workspace-content').getByRole('heading',{name:'Complaints, shortages & returns'})).toBeVisible();
  await expect(page.getByText('No cases in this view')).toBeVisible();
  await expect(page.getByLabel('Case status')).toBeVisible();
+});
+test('notification inbox loads and supports marking a message read',async({page})=>{
+ await mockApi(page,['CUSTOMER_BUYER']);
+ await page.goto('/');await signin(page);
+ const nav=page.getByRole('navigation',{name:'Workspace navigation'});
+ await nav.getByRole('button',{name:'Notifications'}).click();
+ await expect(page.locator('#workspace-content').getByRole('heading',{name:'Notifications'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Order confirmed'})).toBeVisible();
+ await expect(page.getByText('1 unread')).toBeVisible();
+ await page.getByRole('button',{name:'Mark as read'}).click();
 });
 test('finance: role-scoped invoices and collections workspace renders safely',async({page},info)=>{
  await mockApi(page,['FINANCE']);
