@@ -48,11 +48,12 @@ export function createLoyaltyRoutes(pool:Pool){
   const kitchen=await pool.query('SELECT producer_organization_id FROM kitchens WHERE id=$1 AND organization_id=$2 AND active=true',[kitchenId.data,c.get('organizationId')]);
   if(!kitchen.rowCount||!kitchen.rows[0].producer_organization_id)throw new BusinessFailure(422,'Kitchen is not assigned to an active supplier');
   const producer=kitchen.rows[0].producer_organization_id;
+  const program=await pool.query("SELECT paise_per_point,minimum_redeem_points,maximum_discount_bps FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE'",[producer]);
   const account=await pool.query('SELECT id,balance_points,updated_at FROM loyalty_accounts WHERE producer_organization_id=$1 AND buyer_organization_id=$2',[producer,c.get('organizationId')]);
-  if(!account.rowCount)return c.json({balancePoints:0,entries:[],programActive:(await pool.query("SELECT 1 FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE'",[producer])).rowCount>0});
+  const programFields={programActive:program.rowCount>0,paisePerPoint:program.rowCount?Number(program.rows[0].paise_per_point):null,minimumRedeemPoints:program.rowCount?Number(program.rows[0].minimum_redeem_points):null,maximumDiscountBps:program.rowCount?Number(program.rows[0].maximum_discount_bps):null};
+  if(!account.rowCount)return c.json({balancePoints:0,entries:[],...programFields});
   const entries=await pool.query('SELECT entry_type,points_delta,note,created_at FROM loyalty_ledger WHERE account_id=$1 ORDER BY created_at DESC LIMIT 100',[account.rows[0].id]);
-  const active=await pool.query("SELECT 1 FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE'",[producer]);
-  return c.json({balancePoints:Number(account.rows[0].balance_points),updatedAt:account.rows[0].updated_at,entries:entries.rows.map(row=>({...row,points_delta:Number(row.points_delta)})),programActive:active.rowCount>0});
+  return c.json({balancePoints:Number(account.rows[0].balance_points),updatedAt:account.rows[0].updated_at,entries:entries.rows.map(row=>({...row,points_delta:Number(row.points_delta)})),...programFields});
  });
  app.get('/admin/loyalty/accounts',async c=>{
   permission(c.get('roles'),'loyalty:review');
