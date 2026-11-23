@@ -137,7 +137,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   const startsAt=new Date(Date.now()-60_000).toISOString(),endsAt=new Date(Date.now()+86_400_000).toISOString();
   const offer=await request('/v1/admin/offers','POST',{
    code:'CI10',name:'UAT ten percent offer',discountType:'PERCENT_BPS',discountValue:1000,
-   maxDiscountPaise:1000,minimumSubtotalPaise:0,startsAt,endsAt,maxRedemptions:1,perBuyerLimit:1
+   maxDiscountPaise:1000,minimumSubtotalPaise:0,startsAt,endsAt,maxRedemptions:2,perBuyerLimit:2
   });
   expect(offer.status).toBe(201);
   const offerId=(await offer.json() as {id:string}).id;
@@ -182,11 +182,9 @@ suite('real PostgreSQL UAT and negative flows',()=>{
 
 
  it('cancels a confirmed customer order before cutoff and releases its slot reservation exactly once',async()=>{
-  const exhausted=await request('/v1/orders','POST',{kitchenId,slotId,deliveryDate,idempotencyKey:'integration-offer-quota-key-0001',items:[{variantId,grams}],promotionCode:'CI10',event},customerToken);
-  expect(exhausted.status).toBe(409);
   const created=await request('/v1/orders','POST',{
    kitchenId,slotId,deliveryDate,idempotencyKey:'integration-cancel-order-key-0001',
-   items:[{variantId,grams}],event
+   items:[{variantId,grams}],promotionCode:'CI10',event
   },customerToken);
   expect(created.status).toBe(201);
   const id=(await created.json() as {id:string}).id;
@@ -200,6 +198,11 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   const db=await pool.query<{state:string;reservations:string}>(
    "SELECT o.state,(SELECT count(*)::text FROM slot_reservations sr WHERE sr.order_id=o.id) AS reservations FROM orders o WHERE o.id=$1",[id]);
   expect(db.rows[0]).toMatchObject({state:'CANCELLED',reservations:'0'});
+  const afterReversal=await request('/v1/orders','POST',{kitchenId,slotId,deliveryDate,idempotencyKey:'integration-after-coupon-reversal-0001',items:[{variantId,grams}],promotionCode:'CI10',event},customerToken);
+  expect(afterReversal.status).toBe(201);
+  const quota=await pool.query<{total:string;active:string}>('SELECT count(*)::text AS total,count(*) FILTER(WHERE reversed_at IS NULL)::text AS active FROM offer_redemptions WHERE offer_id=(SELECT id FROM customer_offers WHERE producer_organization_id=$1 AND code=$2)',[producerOrg,'CI10']);
+  expect(Number(quota.rows[0].total)).toBe(3);
+  expect(Number(quota.rows[0].active)).toBe(2);
   expect((await request('/v1/orders/'+id+'/cancel','POST',{},'')).status).toBe(401);
  });
 
