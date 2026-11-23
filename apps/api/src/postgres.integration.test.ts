@@ -156,6 +156,15 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(first.status).toBe(201);
   const created=await first.json() as {id:string;replayed:boolean};
   orderId=created.id;
+  const buyerInbox=await request('/v1/notifications','GET',undefined,customerToken);
+  expect(buyerInbox.status).toBe(200);
+  const buyerNotices=await buyerInbox.json() as {items:{id:string;title:string;category:string}[];unreadCount:number};
+  expect(buyerNotices.items.some(n=>n.title==='Order confirmed'&&n.category==='ORDER')).toBe(true);
+  const supplierInbox=await request('/v1/notifications','GET',undefined,adminToken);
+  expect((await supplierInbox.json() as {items:{title:string}[]}).items.some(n=>n.title==='New customer order')).toBe(true);
+  const orderNotice=buyerNotices.items.find(n=>n.title==='Order confirmed')!;
+  expect((await request('/v1/notifications/'+orderNotice.id+'/read','PATCH',{},customerToken)).status).toBe(200);
+  expect((await request('/v1/notifications/preferences/ORDER','PUT',{inAppEnabled:false},customerToken)).status).toBe(200);
   expect(created.replayed).toBe(false);
   const replay=await request('/v1/orders','POST',body,customerToken);
   expect(replay.status).toBe(200);
