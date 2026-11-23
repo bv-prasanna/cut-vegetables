@@ -141,6 +141,11 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   });
   expect(offer.status).toBe(201);
   const offerId=(await offer.json() as {id:string}).id;
+  const marketingEmail='uat-marketing@example.invalid',marketingPassword='Marketing-ci-secret-123456';
+  expect((await request('/v1/admin/staff','POST',{email:marketingEmail,password:marketingPassword,roles:['MARKETING']})).status).toBe(201);
+  const marketingLogin=await request('/auth/login','POST',{email:marketingEmail,password:marketingPassword,organizationId:producerOrg},'');
+  const marketingToken=(await marketingLogin.json() as Login).accessToken;
+  expect((await request('/v1/admin/offers/'+offerId+'/status','PATCH',{status:'ACTIVE'},marketingToken)).status).toBe(403);
   expect((await request('/v1/admin/offers/'+offerId+'/status','PATCH',{status:'ACTIVE'})).status).toBe(200);
   const validation=await request('/v1/promotions/validate?code=CI10&kitchenId='+kitchenId,'GET',undefined,customerToken);
   expect(validation.status).toBe(200);
