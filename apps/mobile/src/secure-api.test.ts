@@ -35,6 +35,11 @@ describe('secure mobile environment',()=>{
   expect(screenPermissions(['DRIVER'])).not.toContain('Finance');
   expect(screenPermissions(['DRIVER'])).not.toContain('Wallet');
  });
+ it('provides a notification inbox to customer, finance and delivery roles',()=>{
+  expect(screenPermissions(['CUSTOMER_BUYER'])).toContain('Notifications');
+  expect(screenPermissions(['FINANCE'])).toContain('Notifications');
+  expect(screenPermissions(['DRIVER'])).toContain('Notifications');
+ });
  it('restricts cutting, packing and driver menus to verified role claims',()=>{
   expect(screenPermissions(['OPERATOR'])).toContain('Cutting');
   expect(screenPermissions(['PACKER'])).toContain('Packing');
