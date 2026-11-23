@@ -1,9 +1,9 @@
 export const permissions = {
  SUPERADMIN:['*'],
- ADMIN:['catalog:read','catalog:write','slots:read','slots:write','orders:read','orders:approve','schedules:read','marketing:write','reports:read','users:manage','audit:read','contracts:read','contracts:manage','pricing:approve','quotes:read','quotes:manage'],
- SALES:['catalog:read','orders:read','customers:read','customers:write','pricing:propose','reports:read','contracts:read','contracts:propose','quotes:read','quotes:propose'],
- CUSTOMER_ADMIN:['catalog:read','orders:write','orders:read','schedules:write','schedules:read','buyers:manage','invoices:read','quotes:read','quotes:request','quotes:accept'],
- CUSTOMER_BUYER:['catalog:read','orders:write','orders:read','schedules:write','schedules:read','invoices:read','quotes:read','quotes:request','quotes:accept'],
+ ADMIN:['catalog:read','catalog:write','slots:read','slots:write','orders:read','orders:approve','schedules:read','marketing:write','reports:read','users:manage','audit:read','contracts:read','contracts:manage','pricing:approve','quotes:read','quotes:manage','support:read','support:resolve'],
+ SALES:['catalog:read','orders:read','customers:read','customers:write','pricing:propose','reports:read','contracts:read','contracts:propose','quotes:read','quotes:propose','support:read','support:write'],
+ CUSTOMER_ADMIN:['catalog:read','orders:write','orders:read','schedules:write','schedules:read','buyers:manage','invoices:read','quotes:read','quotes:request','quotes:accept','support:read','support:write'],
+ CUSTOMER_BUYER:['catalog:read','orders:write','orders:read','schedules:write','schedules:read','invoices:read','quotes:read','quotes:request','quotes:accept','support:read','support:write'],
  CUSTOMER_VIEWER:['catalog:read','orders:read','schedules:read','invoices:read','quotes:read'],
  PROCUREMENT:['procurement:write','procurement:read','inventory:read','orders:read'],
  STORE:['inventory:read','inventory:write','procurement:read','production:read'],
