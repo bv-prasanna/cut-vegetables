@@ -152,6 +152,7 @@ function AuthenticatedMobile(){
     else setData([]);
    }
    if(screen==='Notifications'){const inbox=await call<{items:Record<string,unknown>[]}>('/v1/notifications');setData(inbox.items);}
+   if(screen==='Refunds')setData(await call<Record<string,unknown>[]>('/v1/finance/refunds/me'));
    if(path){
     const result=await call<unknown>(path);
     if(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')setCatalogue(result as CatalogueVariant[]);
