@@ -18,6 +18,18 @@ const Panel=({children}:{children:React.ReactNode})=><View style={styles.card}>{
 const Head=({title,subtitle}:{title:string;subtitle?:string})=><View style={styles.cardHead}><Text style={styles.title}>{title}</Text>{Boolean(subtitle)&&<Text style={styles.subtitle}>{subtitle}</Text>}</View>;
 const Cell=({title,value}:{title:string;value:string})=><View style={styles.cell}><Text style={styles.label}>{title}</Text><Text style={styles.value}>{value}</Text></View>;
 export default function WorkQueueCards({screen,rows,loading}:Props){
+ if(screen==='Refunds'){
+  return <><Text style={styles.sectionTitle}>Refund status</Text>
+   {rows.map((value,i)=>{const r=rowOf(value);return <Panel key={String(r.id??i)}>
+    <View style={styles.topRow}><View style={styles.grow}><Text style={styles.title}>Refund #{textOf(r.refund_number,String(i+1))}</Text>
+     <Text style={styles.subtitle}>{textOf(r.method)} · {textOf(r.reason)}</Text>
+     <Text style={styles.hint}>{textOf(r.external_reference,'No settlement reference yet')}</Text>
+    </View><Status value={humanState(r.status)}/></View>
+    <Text style={styles.itemValue}>₹{(Number(r.amount_paise||0)/100).toFixed(2)}</Text>
+   </Panel>})}
+   {!rows.length&&<View style={styles.empty}><Text style={styles.subtitle}>No refund requests yet.</Text></View>}
+  </>;
+ }
  if(screen==='Notifications'){
   return <><Text style={styles.sectionTitle}>Your notifications</Text>
    {rows.map((value,i)=>{const r=rowOf(value);return <Panel key={String(r.id??i)}>
