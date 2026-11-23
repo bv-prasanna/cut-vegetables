@@ -31,6 +31,7 @@ const orderSchema=z.object({
  idempotencyKey:z.string().min(8).max(120),
  items:z.array(z.object({variantId:z.string().uuid(),grams:z.number().int().positive()})).min(1).max(50),
  promotionCode:z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9_-]+$/).optional(),
+ loyaltyPoints:z.number().int().nonnegative().max(1000000).optional(),
  event:geoEventSchema
 });
 const reject=(message:string)=>({error:message});
@@ -173,7 +174,7 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
   const requestFingerprint=JSON.stringify({
    kitchenId:data.kitchenId,slotId:data.slotId,deliveryDate:data.deliveryDate,
    items:[...data.items].sort((a,b)=>a.variantId.localeCompare(b.variantId)),
-   promotionCode:data.promotionCode?.toUpperCase()??null
+   promotionCode:data.promotionCode?.toUpperCase()??null,loyaltyPoints:data.loyaltyPoints??0
   });
   const client=await pool.connect();
   try{
@@ -222,8 +223,22 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
     promotionId=offer.id;
     promotionSnapshot={code:offer.code,discountType:offer.discount_type,discountValue:offer.discount_value,discountPaise:discount};
    }
+   let loyaltyPointsRedeemed=0,loyaltyDiscountPaise=0,loyaltyAccountId:string|null=null;
+   if((data.loyaltyPoints??0)>0){
+    loyaltyPointsRedeemed=data.loyaltyPoints??0;
+    const program=await client.query("SELECT paise_per_point,minimum_redeem_points,maximum_discount_bps FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE' FOR UPDATE",[kitchen.rows[0].producer_organization_id]);
+    if(!program.rowCount){await client.query('ROLLBACK');return c.json(reject('An approved loyalty programme is not active for this supplier'),409);}
+    if(loyaltyPointsRedeemed<Number(program.rows[0].minimum_redeem_points)){await client.query('ROLLBACK');return c.json(reject('The points amount is below the minimum redemption requirement'),422);}
+    const account=await client.query('SELECT id,balance_points FROM loyalty_accounts WHERE producer_organization_id=$1 AND buyer_organization_id=$2 FOR UPDATE',[kitchen.rows[0].producer_organization_id,c.get('organizationId')]);
+    if(!account.rowCount||Number(account.rows[0].balance_points)<loyaltyPointsRedeemed){await client.query('ROLLBACK');return c.json(reject('Insufficient loyalty points balance'),409);}
+    loyaltyAccountId=account.rows[0].id;
+    loyaltyDiscountPaise=loyaltyPointsRedeemed*Number(program.rows[0].paise_per_point);
+    const maxLoyaltyDiscount=Math.floor(subtotal*Number(program.rows[0].maximum_discount_bps)/10000);
+    if(loyaltyDiscountPaise>maxLoyaltyDiscount||loyaltyDiscountPaise>subtotal-discount){await client.query('ROLLBACK');return c.json(reject('Requested points exceed the loyalty redemption limit for this order'),422);}
+    discount+=loyaltyDiscountPaise;
+   }
    const total=subtotal-discount+deliveryFee;
-   const pricingSnapshot={contractId:pricing.contract.id,contractVersion:pricing.contract.version,subtotalPaise:subtotal,deliveryFeePaise:deliveryFee,discountPaise:discount,promotion:promotionSnapshot,totalPaise:total,currency:'INR'};
+   const pricingSnapshot={contractId:pricing.contract.id,contractVersion:pricing.contract.version,subtotalPaise:subtotal,deliveryFeePaise:deliveryFee,discountPaise:discount,promotion:promotionSnapshot,loyaltyPointsRedeemed,loyaltyDiscountPaise,totalPaise:total,currency:'INR'};
    const inserted=await client.query('INSERT INTO orders(organization_id,kitchen_id,slot_id,delivery_date,idempotency_key,request_fingerprint,producer_organization_id,contract_id,contract_version,subtotal_paise,delivery_fee_paise,discount_paise,total_paise,pricing_snapshot,promotion_id) VALUES($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15) RETURNING id',[c.get('organizationId'),data.kitchenId,data.slotId,data.deliveryDate,data.idempotencyKey,requestFingerprint,kitchen.rows[0].producer_organization_id,pricing.contract.id,pricing.contract.version,subtotal,deliveryFee,discount,total,JSON.stringify(pricingSnapshot),promotionId]);
    const orderId:string=inserted.rows[0].id;
    for(const item of data.items){const v=prices.get(item.variantId)!;const amount=Math.round(v.price_paise_per_kg*item.grams/1000);
@@ -231,6 +246,11 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
     await client.query('INSERT INTO order_items(order_id,variant_id,grams,price_paise_per_kg,line_total_paise,contract_price_rule_id,pricing_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)',[orderId,item.variantId,item.grams,v.price_paise_per_kg,amount,v.id,JSON.stringify(itemSnapshot)]);
    }
    if(promotionId)await client.query('INSERT INTO offer_redemptions(offer_id,producer_organization_id,buyer_organization_id,order_id,discount_paise) VALUES($1,$2,$3,$4,$5)',[promotionId,kitchen.rows[0].producer_organization_id,c.get('organizationId'),orderId,discount]);
+   if(loyaltyAccountId&&loyaltyPointsRedeemed>0){
+    await client.query("INSERT INTO loyalty_ledger(account_id,entry_type,points_delta,order_id,idempotency_key,note,created_by) VALUES($1,'REDEEM',$2,$3,$4,'Points redeemed on order confirmation',$5)",[loyaltyAccountId,-loyaltyPointsRedeemed,orderId,'REDEEM:'+orderId,c.get('userId')]);
+    await client.query('UPDATE loyalty_accounts SET balance_points=balance_points-$2,updated_at=now() WHERE id=$1',[loyaltyAccountId,loyaltyPointsRedeemed]);
+    await recordEvent(client,c.get('organizationId'),c.get('userId'),systemEvent('LOYALTY_POINTS_REDEEMED','LOYALTY_ACCOUNT',loyaltyAccountId),'LOYALTY_POINTS_REDEEMED','LOYALTY_ACCOUNT',loyaltyAccountId);
+   }
    await client.query('INSERT INTO slot_reservations(slot_id,delivery_date,order_id) VALUES($1,$2::date,$3)',[data.slotId,data.deliveryDate,orderId]);
    await insertGeoEvent(client,{...data.event,subjectId:orderId},c.get('organizationId'),c.get('userId'));
    await client.query('COMMIT');return c.json({id:orderId,replayed:false},201);
