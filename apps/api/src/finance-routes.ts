@@ -25,7 +25,7 @@ export function createFinanceRoutes(pool:Pool){
   const [invoices,receipts,credits]=await Promise.all([
    pool.query('SELECT count(*)::int AS invoice_count,COALESCE(sum(total_paise),0)::bigint AS invoiced_paise,COALESCE(sum(total_paise-COALESCE(paid.paid_paise,0)),0)::bigint AS outstanding_paise FROM finance_invoices i LEFT JOIN LATERAL(SELECT sum(a.amount_paise) AS paid_paise FROM finance_allocations a WHERE a.invoice_id=i.id) paid ON true WHERE i.producer_organization_id=$1 AND i.status<>\'VOID\'',[org]),
    pool.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS received_paise,count(*)::int AS receipt_count FROM finance_receipts WHERE producer_organization_id=$1',[org]),
-   pool.query('SELECT COALESCE(sum(cn.amount_paise),0)::bigint AS approved_credit_paise FROM finance_credit_notes cn JOIN finance_invoices i ON i.id=cn.invoice_id WHERE i.producer_organization_id=$1 AND cn.status=\'APPROVED\'',[org])
+   pool.query('SELECT COALESCE(sum(cn.amount_paise),0)::bigint AS approved_credit_paise FROM finance_credit_notes cn JOIN finance_invoices i ON i.id=cn.invoice_id WHERE i.producer_organization_id=$1 AND cn.status<>\'VOID\'',[org])
   ]);
   return c.json({invoices:invoices.rows[0],receipts:receipts.rows[0],credits:credits.rows[0],currency:'INR',taxInvoiceIssuingEnabled:false});
  });
@@ -88,7 +88,7 @@ export function createFinanceRoutes(pool:Pool){
    const invoice=await tx.query('SELECT id,total_paise FROM finance_invoices WHERE id=$1 AND producer_organization_id=$2 FOR UPDATE',[invoiceId,c.get('organizationId')]);
    if(!invoice.rowCount)throw new BusinessFailure(404,'Invoice not found');
    const paid=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_allocations WHERE invoice_id=$1',[invoiceId]);
-   const credits=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_credit_notes WHERE invoice_id=$1 AND status<>'VOID'',[invoiceId]);
+   const credits=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_credit_notes WHERE invoice_id=$1 AND status<>\'VOID\'',[invoiceId]);
    if(d.amountPaise>Number(invoice.rows[0].total_paise)-Number(paid.rows[0].n)-Number(credits.rows[0].n))throw new BusinessFailure(409,'Credit note exceeds the remaining invoice balance');
    const row=await tx.query('INSERT INTO finance_credit_notes(invoice_id,amount_paise,reason,created_by) VALUES($1,$2,$3,$4) RETURNING id,credit_number,status,amount_paise',[invoiceId,d.amountPaise,d.reason,c.get('userId')]);
    await recordEvent(tx,c.get('organizationId'),c.get('userId'),systemEvent('CREDIT_NOTE_DRAFTED','CREDIT_NOTE',row.rows[0].id),'CREDIT_NOTE_DRAFTED','CREDIT_NOTE',row.rows[0].id);return row.rows[0];
