@@ -44,6 +44,7 @@ async function mockApi(page:Page,roles:string[]|null){
   if(p==='/v1/finance/summary')return ok({invoices:{invoice_count:0,invoiced_paise:0,outstanding_paise:0},receipts:{received_paise:0,receipt_count:0},credits:{approved_credit_paise:0},taxInvoiceIssuingEnabled:false});
   if(p==='/v1/admin/loyalty/program')return ok(null);
   if(p==='/v1/admin/loyalty/accounts')return ok([]);
+  if(p==='/v1/finance/refunds'||p==='/v1/finance/refunds/candidates'||p==='/v1/finance/refunds/me')return ok([]);
   if(p==='/v1/loyalty/me')return ok({balancePoints:45,programActive:true,paisePerPoint:10,minimumRedeemPoints:1,maximumDiscountBps:1000,entries:[{entry_type:'EARN',points_delta:45,note:'UAT delivery reward',created_at:'2026-11-24T00:00:00.000Z'}]});
   if(p==='/v1/notifications'&&req.method()==='GET')return ok({items:[{id:'88888888-8888-4888-8888-888888888888',category:'ORDER',title:'Order confirmed',body:'Your order is confirmed.',subject_type:'ORDER',subject_id:'uat-order',created_at:'2026-11-24T00:00:00.000Z',read_at:null}],unreadCount:1});
   if(p==='/v1/notifications/preferences'&&req.method()==='GET')return ok([]);
