@@ -164,6 +164,8 @@ test('finance: role-scoped invoices and collections workspace renders safely',as
  await expect(page.locator('#workspace-content').getByRole('heading',{name:'Invoices, collections & credits'})).toBeVisible();
  await expect(page.getByText('Tax control:')).toBeVisible();
  await expect(page.getByText('No delivered orders are waiting for an invoice.')).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Loyalty programme'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Customer points accounts'})).toBeVisible();
  await expect(errors).toEqual([]);
  await assertNoHorizontalOverflow(page);
  await page.screenshot({path:info.outputPath('finance-workspace.png'),fullPage:true});
