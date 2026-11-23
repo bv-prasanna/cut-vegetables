@@ -42,6 +42,8 @@ async function mockApi(page:Page,roles:string[]|null){
   if(p==='/v1/finance/invoices')return ok([]);
   if(p==='/v1/finance/ready-orders')return ok([]);
   if(p==='/v1/finance/summary')return ok({invoices:{invoice_count:0,invoiced_paise:0,outstanding_paise:0},receipts:{received_paise:0,receipt_count:0},credits:{approved_credit_paise:0},taxInvoiceIssuingEnabled:false});
+  if(p==='/v1/admin/loyalty/program')return ok(null);
+  if(p==='/v1/admin/loyalty/accounts')return ok([]);
   if(p==='/v1/promotions/validate')return ok({code:'WELCOME10',name:'Welcome offer',discountType:'PERCENT_BPS',discountValue:1000,maxDiscountPaise:1000,minimumSubtotalPaise:0});
 
   if(p.startsWith('/v1/quotes/')&&p.endsWith('/accept'))return ok({id:'99999999-9999-4999-8999-999999999998',replayed:false},201);
