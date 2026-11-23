@@ -4,6 +4,7 @@ import type {Pool} from 'pg';
 import {canAny,type Role} from './authorization.js';
 import {geoEventSchema} from './geo-events.js';
 import {BusinessFailure,inTransaction,recordEvent,requireRow,respondError,systemEvent} from './ops-db.js';
+import {notifyOrganization} from './notification-service.js';
 import {validateBatchYield} from './workflow.js';
 type Env={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const uuid=z.string().uuid();
@@ -299,11 +300,13 @@ export function createOperationsRoutes(pool:Pool){
      VALUES($1,$2,now(),$3,$4) RETURNING id`,[idParam(c),input.receivedBy,eventId,input.notes??null]);
    await tx.query("UPDATE delivery_stops SET status='DELIVERED',completed_at=now() WHERE id=$1",[idParam(c)]);
    const delivered=await tx.query("UPDATE orders SET state='DELIVERED' WHERE id=$1 AND state='DISPATCHED' RETURNING id",[stop.order_id]);
+   let programPointsEarned=0;
    if(delivered.rowCount){
     const program=await tx.query("SELECT points_per_100_rupees FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE'",[c.get('organizationId')]);
     if(program.rowCount){
      const qualifyingPaise=Math.max(0,Number(stop.subtotal_paise)-Number(stop.discount_paise||0));
      const points=Math.floor(qualifyingPaise*Number(program.rows[0].points_per_100_rupees)/10000);
+     programPointsEarned=points;
      if(points>0){
       await tx.query('INSERT INTO loyalty_accounts(producer_organization_id,buyer_organization_id) VALUES($1,$2) ON CONFLICT(producer_organization_id,buyer_organization_id) DO NOTHING',[c.get('organizationId'),stop.buyer_organization_id]);
       const account=await tx.query('SELECT id FROM loyalty_accounts WHERE producer_organization_id=$1 AND buyer_organization_id=$2 FOR UPDATE',[c.get('organizationId'),stop.buyer_organization_id]);
@@ -315,6 +318,8 @@ export function createOperationsRoutes(pool:Pool){
      }
     }
    }
+   await notifyOrganization(tx,stop.buyer_organization_id,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'DELIVERY','Order delivered','Your FreshPrep order has been delivered. Please review the items and contact support if anything is missing.','ORDER',stop.order_id,'ORDER_DELIVERED:'+stop.order_id,{orderId:stop.order_id});
+   if(programPointsEarned>0)await notifyOrganization(tx,stop.buyer_organization_id,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'LOYALTY','Loyalty points added','Points have been added to your rewards wallet after delivery.','ORDER',stop.order_id,'LOYALTY_EARNED:'+stop.order_id,{orderId:stop.order_id,points:programPointsEarned});
    return {proofId:proof.rows[0].id,orderId:stop.order_id};
   });
   return c.json(data,201);
