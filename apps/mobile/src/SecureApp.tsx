@@ -151,7 +151,7 @@ function AuthenticatedMobile(){
     if(kitchens[0]){const account=await call<Record<string,unknown>>('/v1/loyalty/me?kitchenId='+encodeURIComponent(kitchens[0].id));setData([account]);}
     else setData([]);
    }
-   if(screen==='Notifications'){const inbox=await call<{items:Record<string,unknown>[]>}>('/v1/notifications');setData(inbox.items);}
+   if(screen==='Notifications'){const inbox=await call<{items:Record<string,unknown>[]}>('/v1/notifications');setData(inbox.items);}
    if(path){
     const result=await call<unknown>(path);
     if(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')setCatalogue(result as CatalogueVariant[]);
