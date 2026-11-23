@@ -78,3 +78,18 @@
 .fp-quote-actions label{display:grid;gap:4px;font-size:11px}
 .fp-quote-actions input{max-width:120px;padding:8px;border:1px solid #d9e6da;border-radius:7px}
 @media(max-width:700px){.fp-customer-quotes article,.fp-quote-queue article{align-items:flex-start;flex-direction:column}.fp-quote-actions{width:100%;flex-wrap:wrap}}
+
+.fp-customer-support{grid-column:1/-1;padding:24px;background:#fff;border:1px solid #e5ece4;border-radius:16px;box-shadow:0 8px 24px #1e49300b}
+.fp-customer-support h3{font:800 19px 'Manrope',sans-serif;color:#214b33;margin:0 0 16px}
+.fp-customer-support-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:16px;background:#f7faf6;border:1px solid #e8efe7;border-radius:12px;margin-bottom:18px}
+.fp-customer-support-form label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#335e40}
+.fp-customer-support-form label:nth-child(3){grid-column:1/-1}
+.fp-customer-support-form input,.fp-customer-support-form select,.fp-customer-support-form textarea{width:100%;min-height:42px;padding:10px 12px;border:1px solid #dbe6db;border-radius:9px;background:white;color:#243d2b;font:inherit}
+.fp-customer-support-form textarea{resize:vertical;min-height:82px}
+.fp-customer-support-form button{justify-self:start;padding:11px 17px;border:0;border-radius:9px;background:#17613d;color:#fff;font-weight:800}
+.fp-customer-support-form button:disabled{opacity:.5;cursor:not-allowed}
+.fp-customer-support-list article{padding:14px 0;border-bottom:1px solid #e8eee8}
+.fp-customer-support-list article>div{display:grid;grid-template-columns:1fr auto;gap:6px}
+.fp-customer-support-list article span{padding:4px 9px;border-radius:20px;background:#eef5ee;color:#346746;font-size:10px;font-weight:800}
+.fp-customer-support-list article p,.fp-customer-support-list article small{grid-column:1/-1;color:#68796b;font-size:12px}
+@media(max-width:700px){.fp-customer-support-form{grid-template-columns:1fr}.fp-customer-support-form label:nth-child(3){grid-column:auto}.fp-customer-support{padding:16px}}
