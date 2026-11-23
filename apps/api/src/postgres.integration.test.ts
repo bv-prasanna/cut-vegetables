@@ -368,6 +368,11 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(replay.status).toBe(409);
   const state=await pool.query<{state:string}>('SELECT state FROM orders WHERE id=$1',[orderId]);
   expect(state.rows[0].state).toBe('DELIVERED');
+  const wallet=await request('/v1/loyalty/me?kitchenId='+kitchenId,'GET',undefined,customerToken);
+  expect(wallet.status).toBe(200);
+  const walletBody=await wallet.json() as {balancePoints:number;entries:{entry_type:string;points_delta:number}[]};
+  expect(walletBody.balancePoints).toBeGreaterThan(0);
+  expect(walletBody.entries).toContainEqual(expect.objectContaining({entry_type:'EARN',points_delta:walletBody.balancePoints}));
   const customerOrderDetail=await request('/v1/orders/'+orderId,'GET',undefined,customerToken);
   expect(customerOrderDetail.status).toBe(200);
   const detail=await customerOrderDetail.json() as {
@@ -434,6 +439,14 @@ suite('real PostgreSQL UAT and negative flows',()=>{
 
  it('creates provisional invoices and enforces receipt allocation and credit-note limits',async()=>{
   expect(financeToken).toBeTruthy();
+  const adjustment=await request('/v1/admin/loyalty/adjustments','POST',{buyerOrganizationId:customerOrg,pointsDelta:2,idempotencyKey:'CI-LOYALTY-ADJUSTMENT-001',note:'UAT approved customer goodwill points.'},financeToken);
+  expect(adjustment.status).toBe(201);
+  expect(await adjustment.json()).toMatchObject({balancePoints:5,replayed:false});
+  const adjustmentReplay=await request('/v1/admin/loyalty/adjustments','POST',{buyerOrganizationId:customerOrg,pointsDelta:2,idempotencyKey:'CI-LOYALTY-ADJUSTMENT-001',note:'UAT approved customer goodwill points.'},financeToken);
+  expect(adjustmentReplay.status).toBe(201);
+  expect(await adjustmentReplay.json()).toMatchObject({balancePoints:5,replayed:true});
+  const invalidAdjustment=await request('/v1/admin/loyalty/adjustments','POST',{buyerOrganizationId:customerOrg,pointsDelta:-100,idempotencyKey:'CI-LOYALTY-ADJUSTMENT-002',note:'Negative balance must be blocked.'},financeToken);
+  expect(invalidAdjustment.status).toBe(409);
   const invoiceResponse=await request('/v1/finance/invoices/from-order/'+orderId,'POST',{},financeToken);
   expect(invoiceResponse.status).toBe(201);
   const invoice=await invoiceResponse.json() as {id:string;total_paise:number;status:string;tax_policy_status:string};
