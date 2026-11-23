@@ -249,7 +249,7 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
    if(loyaltyAccountId&&loyaltyPointsRedeemed>0){
     await client.query("INSERT INTO loyalty_ledger(account_id,entry_type,points_delta,order_id,idempotency_key,note,created_by) VALUES($1,'REDEEM',$2,$3,$4,'Points redeemed on order confirmation',$5)",[loyaltyAccountId,-loyaltyPointsRedeemed,orderId,'REDEEM:'+orderId,c.get('userId')]);
     await client.query('UPDATE loyalty_accounts SET balance_points=balance_points-$2,updated_at=now() WHERE id=$1',[loyaltyAccountId,loyaltyPointsRedeemed]);
-    await recordEvent(client,c.get('organizationId'),c.get('userId'),systemEvent('LOYALTY_POINTS_REDEEMED','LOYALTY_ACCOUNT',loyaltyAccountId),'LOYALTY_POINTS_REDEEMED','LOYALTY_ACCOUNT',loyaltyAccountId);
+    await insertGeoEvent(client,{...data.event,eventType:'LOYALTY_POINTS_REDEEMED',subjectType:'LOYALTY_ACCOUNT',subjectId:loyaltyAccountId},c.get('organizationId'),c.get('userId'));
    }
    await client.query('INSERT INTO slot_reservations(slot_id,delivery_date,order_id) VALUES($1,$2::date,$3)',[data.slotId,data.deliveryDate,orderId]);
    await insertGeoEvent(client,{...data.event,subjectId:orderId},c.get('organizationId'),c.get('userId'));
