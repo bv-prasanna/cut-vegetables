@@ -34,6 +34,7 @@ export function createOrderLifecycleRoutes(pool:Pool,clock:()=>Date=()=>new Date
     throw new BusinessFailure(409,'The cancellation cutoff has passed. Contact FreshPrep support for assistance.');
    await tx.query("UPDATE orders SET state='CANCELLED' WHERE id=$1 AND organization_id=$2",[id,org]);
    await tx.query('DELETE FROM slot_reservations WHERE order_id=$1',[id]);
+   await tx.query('UPDATE offer_redemptions SET reversed_at=now() WHERE order_id=$1 AND reversed_at IS NULL',[id]);
    await recordEvent(tx,org,c.get('userId'),body.data.event??systemEvent('ORDER_CANCELLED','ORDER',id),'ORDER_CANCELLED','ORDER',id);
    return {id,state:'CANCELLED',replayed:false};
   });
