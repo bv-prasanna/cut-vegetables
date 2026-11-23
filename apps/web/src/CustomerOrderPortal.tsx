@@ -42,13 +42,14 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const [products,setProducts]=useState<Product[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]),[slots,setSlots]=useState<Slot[]>([]);
  const [orders,setOrders]=useState<Order[]>([]),[schedules,setSchedules]=useState<Schedule[]>([]),[quotes,setQuotes]=useState<Quote[]>([]),[supportCases,setSupportCases]=useState<SupportCase[]>([]);
  const [supportOrder,setSupportOrder]=useState(''),[supportCategory,setSupportCategory]=useState('QUALITY'),[supportDescription,setSupportDescription]=useState(''),[supportResolution,setSupportResolution]=useState('');
- const [wallet,setWallet]=useState<{balancePoints:number;programActive:boolean;entries:{entry_type:string;points_delta:number;note:string|null;created_at:string}[]}|null>(null);
+ const [wallet,setWallet]=useState<{balancePoints:number;programActive:boolean;paisePerPoint:number|null;minimumRedeemPoints:number|null;maximumDiscountBps:number|null;entries:{entry_type:string;points_delta:number;note:string|null;created_at:string}[]}|null>(null);
  const [view,setView]=useState<'Order'|'Recurring'|'History'>('Order');
  const [search,setSearch]=useState(''),[basket,setBasket]=useState<Record<string,number>>({});
  const [promotionCode,setPromotionCode]=useState(''),[promotion,setPromotion]=useState<{code:string;name:string;discountType:'FIXED_PAISE'|'PERCENT_BPS';discountValue:number;maxDiscountPaise:number|null;minimumSubtotalPaise:number}|null>(null),[promotionMessage,setPromotionMessage]=useState('');
  const [kitchen,setKitchen]=useState(''),[slot,setSlot]=useState(''),[date,setDate]=useState(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}));
  const [frequency,setFrequency]=useState<'DAILY'|'WEEKLY'>('WEEKLY'),[weekdays,setWeekdays]=useState<number[]>([1,2,3,4,5,6]);
  const [status,setStatus]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ const [loyaltyPointsToRedeem,setLoyaltyPointsToRedeem]=useState('');
  const onLogoutRef=useRef(onLogout);
  const pendingOrderRef=useRef<{fingerprint:string;key:string}|null>(null);
   const pendingQuoteRef=useRef<{fingerprint:string;key:string}|null>(null);
@@ -75,7 +76,7 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
   }catch(e){setError(e instanceof Error?e.message:'Unable to load ordering');}
   finally{setBusy(false);}
  },[call]);
- useEffect(()=>{if(!kitchen){setWallet(null);return;}let active=true;void call<{balancePoints:number;programActive:boolean;entries:{entry_type:string;points_delta:number;note:string|null;created_at:string}[]}>('/v1/loyalty/me?kitchenId='+encodeURIComponent(kitchen)).then(value=>{if(active)setWallet(value);}).catch(()=>{if(active)setWallet(null);});return()=>{active=false;};},[kitchen,call]);
+ useEffect(()=>{if(!kitchen){setWallet(null);return;}let active=true;void call<{balancePoints:number;programActive:boolean;paisePerPoint:number|null;minimumRedeemPoints:number|null;maximumDiscountBps:number|null;entries:{entry_type:string;points_delta:number;note:string|null;created_at:string}[]}>('/v1/loyalty/me?kitchenId='+encodeURIComponent(kitchen)).then(value=>{if(active)setWallet(value);}).catch(()=>{if(active)setWallet(null);});return()=>{active=false;};},[kitchen,call]);
  useEffect(()=>{void refresh();},[refresh]);
  useEffect(()=>{if(previousKitchen.current&&previousKitchen.current!==kitchen)setBasket({});previousKitchen.current=kitchen;},[kitchen]);
  useEffect(()=>{
@@ -92,7 +93,9 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const subtotal=selected.reduce((sum,item)=>sum+Math.round((products.find(p=>p.id===item.variantId)?.price_paise_per_kg||0)*item.grams/1000),0);
   const deliveryFee=selected.length?Number(products.find(p=>p.id===selected[0].variantId)?.delivery_fee_paise||0):0;
   const promotionDiscount=promotion&&view==='Order'&&subtotal>=promotion.minimumSubtotalPaise?Math.min(subtotal,promotion.discountType==='FIXED_PAISE'?promotion.discountValue:Math.floor(subtotal*promotion.discountValue/10000),promotion.maxDiscountPaise??Number.MAX_SAFE_INTEGER):0;
-  const total=subtotal-promotionDiscount+deliveryFee;
+  const requestedLoyaltyPoints=Math.max(0,Number(loyaltyPointsToRedeem)||0);
+  const loyaltyDiscountPaise=wallet?.programActive&&requestedLoyaltyPoints>=(wallet.minimumRedeemPoints||1)&&requestedLoyaltyPoints<=wallet.balancePoints?Math.min(requestedLoyaltyPoints*(wallet.paisePerPoint||0),Math.floor(subtotal*(wallet.maximumDiscountBps||0)/10000),subtotal-promotionDiscount):0;
+  const total=subtotal-promotionDiscount-loyaltyDiscountPaise+deliveryFee;
  const selectedKitchen=kitchens.find(k=>k.id===kitchen);
  const suitable=slots.filter(s=>s.zone_code===selectedKitchen?.zone_code);
  function change(v:Product,delta:1|-1){
@@ -124,16 +127,16 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
     });
     setStatus('Recurring schedule created: '+saved.id+'. Operations must run the generation job before cutoff.');
    }else{
-    const fingerprint=JSON.stringify({kitchen,slot,date,items:[...selected].sort((a,b)=>a.variantId.localeCompare(b.variantId)),promotionCode:promotionDiscount>0?promotion?.code??null:null});
+    const fingerprint=JSON.stringify({kitchen,slot,date,items:[...selected].sort((a,b)=>a.variantId.localeCompare(b.variantId)),promotionCode:promotionDiscount>0?promotion?.code??null:null,loyaltyPoints:requestedLoyaltyPoints});
     if(!pendingOrderRef.current||pendingOrderRef.current.fingerprint!==fingerprint){
      pendingOrderRef.current={fingerprint,key:crypto.randomUUID()};
     }
     const key=pendingOrderRef.current.key;
     const saved=await call<{id:string;replayed?:boolean}>('/v1/orders','POST',{
-     kitchenId:kitchen,slotId:slot,deliveryDate:date,idempotencyKey:key,items:selected,promotionCode:promotionDiscount>0?promotion?.code:undefined,event
+     kitchenId:kitchen,slotId:slot,deliveryDate:date,idempotencyKey:key,items:selected,promotionCode:promotionDiscount>0?promotion?.code:undefined,loyaltyPoints:requestedLoyaltyPoints||undefined,event
     });
     pendingOrderRef.current=null;
-    setStatus((saved.replayed?'Existing order confirmed: ':'Order confirmed: ')+saved.id);setBasket({});setPromotion(null);setPromotionCode('');setPromotionMessage('');
+    setStatus((saved.replayed?'Existing order confirmed: ':'Order confirmed: ')+saved.id);setBasket({});setPromotion(null);setPromotionCode('');setPromotionMessage('');setLoyaltyPointsToRedeem('');
    }
    await refresh();setView('History');
   }catch(e){setError(e instanceof Error?e.message:'Unable to save');}
@@ -236,12 +239,16 @@ async function setScheduleState(s:Schedule,state:'ACTIVE'|'PAUSED'|'CANCELLED'){
  <label>{view==='Recurring'?'Start date':'Delivery date'}<input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><label>Delivery window<select value={slot} onChange={e=>setSlot(e.target.value)}><option value="">Select a slot</option>{suitable.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
  {view==='Recurring'&&<><label>Frequency<select value={frequency} onChange={e=>setFrequency(e.target.value as 'DAILY'|'WEEKLY')}><option value="DAILY">Daily</option><option value="WEEKLY">Selected weekdays</option></select></label>
  {frequency==='WEEKLY'&&<div className="fp-customer-days">{dayNames.map((n,i)=><button className={weekdays.includes(i)?'selected':''} key={n} onClick={()=>setWeekdays(old=>old.includes(i)?old.filter(x=>x!==i):[...old,i])}>{n}</button>)}</div>}</>}
+ {view==='Order'&&canWrite&&wallet?.programActive&&<div className="fp-customer-promotion">
+  <label>Redeem loyalty points <input type="number" min={wallet.minimumRedeemPoints||1} max={wallet.balancePoints} step="1" value={loyaltyPointsToRedeem} onChange={e=>setLoyaltyPointsToRedeem(e.target.value)} placeholder={'Available '+wallet.balancePoints+' points'}/></label>
+  <small>{wallet.balancePoints} points available · {wallet.paisePerPoint?money(wallet.paisePerPoint)+' value per point':''}. Redemption limits are checked again by the order service.</small>
+ </div>}
  {view==='Order'&&canWrite&&<div className="fp-customer-promotion">
   <label>Offer code<input value={promotionCode} onChange={e=>{setPromotionCode(e.target.value.toUpperCase());setPromotion(null);setPromotionMessage('')}} placeholder="Enter coupon code" maxLength={32}/></label>
   <button type="button" disabled={busy||!promotionCode.trim()||!kitchen} onClick={()=>void applyPromotion()}>{busy?'Checking…':'Apply offer'}</button>
   {promotionMessage&&<small role="status">{promotionMessage}</small>}
  </div>}
- <div className="fp-customer-total"><span>Selected products</span><b>{selected.length}</b></div><div className="fp-customer-total"><span>Product subtotal</span><b>{money(subtotal)}</b></div><div className="fp-customer-total"><span>Contract delivery fee</span><b>{money(deliveryFee)}</b></div>{promotionDiscount>0&&<div className="fp-customer-total"><span>Offer discount</span><b>−{money(promotionDiscount)}</b></div>}<div className="fp-customer-total grand"><span>Estimated total incl. delivery</span><b>{money(total)}</b></div>
+ <div className="fp-customer-total"><span>Selected products</span><b>{selected.length}</b></div><div className="fp-customer-total"><span>Product subtotal</span><b>{money(subtotal)}</b></div><div className="fp-customer-total"><span>Contract delivery fee</span><b>{money(deliveryFee)}</b></div>{promotionDiscount>0&&<div className="fp-customer-total"><span>Offer discount</span><b>−{money(promotionDiscount)}</b></div>}{loyaltyDiscountPaise>0&&<div className="fp-customer-total"><span>Loyalty points</span><b>−{money(loyaltyDiscountPaise)}</b></div>}<div className="fp-customer-total grand"><span>Estimated total incl. delivery</span><b>{money(total)}</b></div>
   {canWrite&&<button className="fp-customer-submit" disabled={busy} onClick={()=>void submit(view==='Recurring')}>{busy?'Processing…':view==='Recurring'?'Create recurring schedule':'Confirm order'}</button>}
   {canRequestQuote&&view==='Order'&&<button className="fp-customer-quote-button" type="button" disabled={busy||!selected.length} onClick={()=>void requestQuote()}>{busy?'Submitting…':'Request a quote'}</button>}
  <small>Prices are indicative until confirmed. Slot capacity and booking cutoff are checked before your order is accepted. Recurring orders are generated before each cutoff by operations.</small></aside></div>}
