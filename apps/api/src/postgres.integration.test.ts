@@ -382,6 +382,10 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(replay.status).toBe(409);
   const state=await pool.query<{state:string}>('SELECT state FROM orders WHERE id=$1',[orderId]);
   expect(state.rows[0].state).toBe('DELIVERED');
+  const deliveryInbox=await request('/v1/notifications','GET',undefined,customerToken);
+  const deliveryNotices=(await deliveryInbox.json() as {items:{category:string;title:string}[]}).items;
+  expect(deliveryNotices.some(n=>n.category==='DELIVERY'&&n.title==='Order delivered')).toBe(true);
+  expect(deliveryNotices.some(n=>n.category==='LOYALTY'&&n.title==='Loyalty points added')).toBe(true);
   const wallet=await request('/v1/loyalty/me?kitchenId='+kitchenId,'GET',undefined,customerToken);
   expect(wallet.status).toBe(200);
   const walletBody=await wallet.json() as {balancePoints:number;entries:{entry_type:string;points_delta:number}[]};
