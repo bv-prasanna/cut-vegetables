@@ -59,8 +59,8 @@ export function createOfferRoutes(pool:Pool){
   const o=q.rows[0];
   if(o.status!=='ACTIVE'||new Date(o.starts_at)>new Date()||new Date(o.ends_at)<=new Date())throw new BusinessFailure(409,'This offer is not currently available');
   const [global,buyer]=await Promise.all([
-   pool.query('SELECT count(*)::int AS n FROM offer_redemptions WHERE offer_id=$1',[o.id]),
-   pool.query('SELECT count(*)::int AS n FROM offer_redemptions WHERE offer_id=$1 AND buyer_organization_id=$2',[o.id,c.get('organizationId')])
+   pool.query('SELECT count(*)::int AS n FROM offer_redemptions WHERE offer_id=$1 AND reversed_at IS NULL',[o.id]),
+   pool.query('SELECT count(*)::int AS n FROM offer_redemptions WHERE offer_id=$1 AND reversed_at IS NULL AND buyer_organization_id=$2',[o.id,c.get('organizationId')])
   ]);
   if(o.max_redemptions!==null&&global.rows[0].n>=o.max_redemptions)throw new BusinessFailure(409,'This offer has reached its redemption limit');
   if(buyer.rows[0].n>=o.per_buyer_limit)throw new BusinessFailure(409,'Your organisation has already used this offer the maximum number of times');
