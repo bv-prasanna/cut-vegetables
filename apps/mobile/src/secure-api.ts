@@ -30,7 +30,7 @@ export function screenPermissions(roles:readonly string[]):string[]{
  const has=(...values:string[])=>roles.includes('SUPERADMIN')||values.some(role=>roles.includes(role));
  const screens=['Home'];
  if(has('CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER','ADMIN','SALES'))screens.push('Catalogue','Orders');
- if(has('CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER'))screens.push('Invoices');
+ if(has('CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER'))screens.push('Invoices','Wallet');
  if(has('FINANCE'))screens.push('Finance');
  if(has('CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER','ADMIN','SALES'))screens.push('Support');
  if(has('CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER'))screens.push('Recurring');
