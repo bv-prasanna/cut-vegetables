@@ -491,6 +491,8 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   const invoiceResponse=await request('/v1/finance/invoices/from-order/'+orderId,'POST',{},financeToken);
   expect(invoiceResponse.status).toBe(201);
   const invoice=await invoiceResponse.json() as {id:string;total_paise:number;status:string;tax_policy_status:string};
+  const financeInbox=await request('/v1/notifications','GET',undefined,customerToken);
+  expect((await financeInbox.json() as {items:{category:string;title:string}[]}).items.some(n=>n.category==='FINANCE'&&n.title==='Invoice prepared')).toBe(true);
   expect(invoice).toMatchObject({status:'PROVISIONAL',tax_policy_status:'PENDING_APPROVAL'});
   const replay=await request('/v1/finance/invoices/from-order/'+orderId,'POST',{},financeToken);
   expect(replay.status).toBe(200);
