@@ -1,0 +1,41 @@
+.fp-finance{display:grid;gap:20px;color:var(--fp-ink,#20332c)}
+.fp-finance-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px}
+.fp-finance-kicker{font-size:11px;font-weight:800;letter-spacing:.14em;color:#477d65}
+.fp-finance-heading h2{margin:5px 0;font-size:clamp(24px,3vw,32px);letter-spacing:-.035em}
+.fp-finance-heading p,.fp-finance-panel header p{margin:0;color:#718078;font-size:13px}
+.fp-finance-heading>button,.fp-finance-order button,.fp-finance-form button{border:0;border-radius:10px;background:#176b4b;color:white;padding:10px 15px;font-weight:750;cursor:pointer}
+.fp-finance button:disabled{opacity:.55;cursor:not-allowed}
+.fp-finance-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.fp-finance-metrics article{background:linear-gradient(145deg,#fff,#f4f8f5);border:1px solid #e2ebe5;border-radius:15px;padding:16px;min-width:0}
+.fp-finance-metrics span,.fp-finance-metrics small{display:block;color:#718078;font-size:12px}
+.fp-finance-metrics strong{display:block;font-size:clamp(19px,2vw,25px);letter-spacing:-.03em;margin:8px 0 4px}
+.fp-finance-alert{border:1px solid #ead9a7;background:#fffaf0;border-radius:12px;padding:13px 15px;color:#6e5926;font-size:13px;line-height:1.5}
+.fp-finance-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.85fr);gap:16px}
+.fp-finance-panel{background:#fff;border:1px solid #e3ebe6;border-radius:16px;padding:17px;min-width:0;box-shadow:0 8px 26px #193b2b08}
+.fp-finance-panel header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:15px}
+.fp-finance-panel header h3{font-size:16px;margin:0 0 5px}
+.fp-finance-panel header>span{font-size:11px;font-weight:750;background:#edf5ef;color:#37684e;border-radius:99px;padding:6px 9px;white-space:nowrap}
+.fp-finance-order{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;border-top:1px solid #edf1ee;padding:12px 0}
+.fp-finance-order strong,.fp-finance-order small{display:block}
+.fp-finance-order strong{font-size:13px}
+.fp-finance-order small{font-size:11px;color:#78857e;margin-top:4px}
+.fp-finance-order>b{font-size:13px;white-space:nowrap}
+.fp-finance-order button{padding:8px 11px;font-size:12px}
+.fp-finance-empty{padding:16px 0;color:#78857e;font-size:13px}
+.fp-finance-form{display:grid;gap:11px}
+.fp-finance-form label{display:grid;gap:5px;font-size:12px;font-weight:700;color:#52645a}
+.fp-finance-form input,.fp-finance-form select{width:100%;min-width:0;box-sizing:border-box;border:1px solid #dbe5de;border-radius:9px;padding:10px 11px;background:#fbfdfb;color:#20332c;font:inherit;font-size:13px}
+.fp-finance-form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fp-finance-form button{justify-self:start;margin-top:2px}
+.fp-finance-wide{overflow:hidden}
+.fp-finance-table-wrap{overflow:auto}
+.fp-finance table{width:100%;border-collapse:collapse;text-align:left;white-space:nowrap}
+.fp-finance th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#7b8981;background:#f7faf8;padding:10px}
+.fp-finance td{font-size:12px;border-top:1px solid #edf1ee;padding:11px 10px}
+.fp-finance td small{display:block;color:#7b8981;font-size:10px;margin-top:4px}
+.fp-finance-status{display:inline-block;border-radius:99px;background:#fff4dc;color:#805d16;padding:4px 7px;font-size:10px;font-weight:800}
+.fp-finance-credit{max-width:900px}
+.fp-finance-error,.fp-finance-notice{margin:0;border-radius:10px;padding:11px 13px;font-size:13px}
+.fp-finance-error{background:#fff0ef;color:#9a352d}.fp-finance-notice{background:#edf7ef;color:#286343}
+@media(max-width:1050px){.fp-finance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.fp-finance-columns{grid-template-columns:1fr}}
+@media(max-width:620px){.fp-finance-heading{align-items:flex-start;flex-direction:column}.fp-finance-metrics{gap:8px}.fp-finance-metrics article{padding:12px}.fp-finance-form-row{grid-template-columns:1fr}.fp-finance-order{grid-template-columns:minmax(0,1fr) auto}.fp-finance-order button{grid-column:1/-1;justify-self:start}}
