@@ -31,7 +31,7 @@ export function createFinanceRoutes(pool:Pool){
  });
  app.get('/finance/ready-orders',async c=>{
   requirePermission(c.get('roles'),'finance:read');
-  const q=await pool.query('SELECT o.id,o.delivery_date::text AS delivery_date,o.total_paise,b.name AS buyer_name,k.name AS kitchen_name FROM orders o JOIN organizations b ON b.id=o.organization_id JOIN kitchens k ON k.id=o.kitchen_id LEFT JOIN finance_invoices i ON i.order_id=o.id WHERE o.producer_organization_id=$1 AND o.state=\\'DELIVERED\\' AND i.id IS NULL ORDER BY o.delivery_date DESC LIMIT 200',[c.get('organizationId')]);
+  const q=await pool.query('SELECT o.id,o.delivery_date::text AS delivery_date,o.total_paise,b.name AS buyer_name,k.name AS kitchen_name FROM orders o JOIN organizations b ON b.id=o.organization_id JOIN kitchens k ON k.id=o.kitchen_id LEFT JOIN finance_invoices i ON i.order_id=o.id WHERE o.producer_organization_id=$1 AND o.state=\'DELIVERED\' AND i.id IS NULL ORDER BY o.delivery_date DESC LIMIT 200',[c.get('organizationId')]);
   return c.json(q.rows);
  });
  app.get('/finance/invoices',async c=>{
