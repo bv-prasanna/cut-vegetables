@@ -37,6 +37,8 @@ async function mockApi(page:Page,roles:string[]|null){
    return ok({id:mockQuote.id,quoteNumber:mockQuote.quote_number},201);
   }
   if(p==='/v1/quotes')return ok(mockQuote?[mockQuote]:[]);
+  if(p==='/v1/support/cases'&&req.method()==='POST')return ok({id:'77777777-7777-4777-8777-777777777777',caseNumber:1},201);
+  if(p==='/v1/support/cases')return ok([]);
   if(p.startsWith('/v1/quotes/')&&p.endsWith('/accept'))return ok({id:'99999999-9999-4999-8999-999999999998',replayed:false},201);
   if(p.startsWith('/v1/quotes/')&&p.endsWith('/reject'))return ok({ok:true});
   if(p==='/v1/kitchens')return ok([{id:KITCHEN,name:'UAT Kitchen',address:'Bengaluru test address',zone_code:'BENGALURU_TEST'}]);
