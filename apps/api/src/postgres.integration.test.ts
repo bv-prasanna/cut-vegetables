@@ -425,7 +425,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   },financeToken);
   expect(duplicateReference.status).toBe(409);
   const overAllocation=await request('/v1/finance/receipts','POST',{
-   buyerOrganizationId:customerOrg,amountPaise:Number(invoice.total_paise)+1,paymentMethod:'BANK_TRANSFER',
+   buyerOrganizationId:customerOrg,amountPaise:Number(invoice.total_paise)+1,paymentMethod:'BANK_TRANSFER',reference:'CI-UPI-OVERALLOC-001',
    receivedOn:new Date().toISOString().slice(0,10),allocations:[{invoiceId:invoice.id,amountPaise:Number(invoice.total_paise)+1}]
   },financeToken);
   expect(overAllocation.status).toBe(409);
