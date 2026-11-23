@@ -35,7 +35,7 @@ export function createOfferRoutes(pool:Pool){
   return c.json(row,201);
  });
  app.patch('/admin/offers/:id/status',async c=>{
-  failPermission(c.get('roles'),'marketing:write');
+  failPermission(c.get('roles'),'offers:approve');
   const id=z.string().uuid().safeParse(c.req.param('id'));if(!id.success)throw new BusinessFailure(400,'Invalid offer ID');
   const d=parse(await c.req.json().catch(()=>null),z.object({status:z.enum(['ACTIVE','PAUSED','EXPIRED'])}));
   const row=await inTransaction(pool,async tx=>{
