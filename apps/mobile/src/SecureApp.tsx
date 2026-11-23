@@ -144,6 +144,11 @@ function AuthenticatedMobile(){
     setSupportCases(cases);setSupportOrders(orders);
     setSupportOrderId(old=>orders.some(order=>order.id===old)?old:(orders[0]?.id||''));
    }
+   if(screen==='Wallet'){
+    const kitchens=await call<Kitchen[]>('/v1/kitchens');
+    if(kitchens[0]){const account=await call<Record<string,unknown>>('/v1/loyalty/me?kitchenId='+encodeURIComponent(kitchens[0].id));setData([account]);}
+    else setData([]);
+   }
    if(path){
     const result=await call<unknown>(path);
     if(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')setCatalogue(result as CatalogueVariant[]);
