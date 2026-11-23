@@ -134,8 +134,19 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(Number(snapshot.rows[0].total_paise)).toBe(Number(snapshot.rows[0].subtotal_paise)-100+Number(snapshot.rows[0].delivery_fee_paise));
  });
  it('creates one order and replays idempotently without double-reserving the slot',async()=>{
+  const startsAt=new Date(Date.now()-60_000).toISOString(),endsAt=new Date(Date.now()+86_400_000).toISOString();
+  const offer=await request('/v1/admin/offers','POST',{
+   code:'CI10',name:'UAT ten percent offer',discountType:'PERCENT_BPS',discountValue:1000,
+   maxDiscountPaise:1000,minimumSubtotalPaise:0,startsAt,endsAt,maxRedemptions:1,perBuyerLimit:1
+  });
+  expect(offer.status).toBe(201);
+  const offerId=(await offer.json() as {id:string}).id;
+  expect((await request('/v1/admin/offers/'+offerId+'/status','PATCH',{status:'ACTIVE'})).status).toBe(200);
+  const validation=await request('/v1/promotions/validate?code=CI10&kitchenId='+kitchenId,'GET',undefined,customerToken);
+  expect(validation.status).toBe(200);
+  expect(await validation.json()).toMatchObject({code:'CI10',discountType:'PERCENT_BPS',discountValue:1000});
   const key='integration-safe-order-key-0001';
-  const body={kitchenId,slotId,deliveryDate,idempotencyKey:key,items:[{variantId,grams}],event};
+  const body={kitchenId,slotId,deliveryDate,idempotencyKey:key,items:[{variantId,grams}],promotionCode:'CI10',event};
   const first=await request('/v1/orders','POST',body,customerToken);
   expect(first.status).toBe(201);
   const created=await first.json() as {id:string;replayed:boolean};
@@ -158,11 +169,16 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(snapshot.rows[0].contract_id).toBe(contractId);
   expect(Number(snapshot.rows[0].price_paise_per_kg)).toBe(basePrice+250);
   expect(Number(snapshot.rows[0].delivery_fee_paise)).toBe(1500);
-  expect(Number(snapshot.rows[0].total_paise)).toBe(Number(snapshot.rows[0].subtotal_paise)+1500);
+  expect(Number(snapshot.rows[0].discount_paise)).toBeGreaterThan(0);
+  expect(Number(snapshot.rows[0].total_paise)).toBe(Number(snapshot.rows[0].subtotal_paise)-Number(snapshot.rows[0].discount_paise)+1500);
+  const redemption=await pool.query<{n:string}>('SELECT count(*)::text AS n FROM offer_redemptions WHERE order_id=$1',[created.id]);
+  expect(Number(redemption.rows[0].n)).toBe(1);
  });
 
 
  it('cancels a confirmed customer order before cutoff and releases its slot reservation exactly once',async()=>{
+  const exhausted=await request('/v1/orders','POST',{kitchenId,slotId,deliveryDate,idempotencyKey:'integration-offer-quota-key-0001',items:[{variantId,grams}],promotionCode:'CI10',event},customerToken);
+  expect(exhausted.status).toBe(409);
   const created=await request('/v1/orders','POST',{
    kitchenId,slotId,deliveryDate,idempotencyKey:'integration-cancel-order-key-0001',
    items:[{variantId,grams}],event
