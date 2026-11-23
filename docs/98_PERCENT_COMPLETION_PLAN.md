@@ -35,12 +35,12 @@ The percentages below are engineering estimates of implemented functionality, no
 | Dispatch, delivery and POD | 90% | 80% | 85% | 90% | Route optimisation, failed/partial delivery, shortage/return flow, physical GPS/POD UAT |
 | Audit and reporting | 75% | 70% | 60% | 75% | Complete event coverage, export/retention, finance/yield/complaint reports |
 | Marketing CMS (slides and announcements) | 75% | 75% | 0% | 80% | Edit workflow, audience/zone targeting, approval/publish separation |
-| Offers, coupons and loyalty | 15% | 10% | 0% | 10% | Eligibility, stacking, quota concurrency, immutable earn/redeem/reverse ledger |
-| Finance, GST, invoices and payments | 40% | 40% | 25% | 75% | GST profile and tax invoice issuance, refunds, gateway/bank reconciliation, aging and finance reports |
-| Notifications, support, complaints and returns | 45% | 55% | 40% | 60% | Consent, delivery channels/status, refund execution, substitution approval, return pickup and SLA escalation |
+| Offers, coupons and loyalty | 70% | 65% | 55% | 80% | Expiry and breakage, loyalty redemption policy approval, legacy ledger conversion and promotion analytics |
+| Finance, GST, invoices and payments | 40% | 40% | 30% | 75% | GST profile and tax invoice issuance, refunds, gateway/bank reconciliation, aging and finance reports |
+| Notifications, support, complaints and returns | 45% | 55% | 50% | 65% | Consent, delivery channels/status, refund execution, substitution approval, return pickup and SLA escalation |
 | Deployment, backup and release | 40% | 30% | 20% | 25% | Real staging, secret configuration, signed APK, backup/restore, monitoring and rollback |
 
-**Overall estimate (24 Nov 2026):** core order-to-delivery remains approximately 90% backend, 80% web, 85% mobile and 90% automated integration. Full BRD v3 scope is approximately **68–72%** after the support and finance batches. This is an engineering estimate, not a measured test-coverage score or customer acceptance certificate. The full product is not at 98% yet.
+**Overall estimate (24 Nov 2026):** core order-to-delivery remains approximately 90% backend, 80% web, 85% mobile and 90% automated integration. Full BRD v3 scope is approximately **72–76%** after support, finance, offers and loyalty work. This is an engineering estimate, not a measured test-coverage score or customer acceptance certificate. The full product is not at 98% yet.
 
 ## Work completed in the latest implementation batches
 
@@ -55,6 +55,10 @@ The percentages below are engineering estimates of implemented functionality, no
 - A best-effort GitHub Actions recurring-order workflow is present. It requires repository secrets FRESHPREP_DATABASE_URL and FRESHPREP_PRODUCER_ORG_ID; actual scheduled execution is not yet verified.
 - Customer support cases for quality, shortage, wrong item, late delivery, packaging, billing and return requests: buyer/supplier scoped API, duplicate-active-case prevention, audited lifecycle, customer web/mobile forms and staff web queue. PostgreSQL lifecycle and browser UAT are included.
 - Finance foundation: provisional invoice generation from delivered orders, receipt capture with unique references, transactional invoice allocation, draft/approved credit notes, credit-adjusted invoice balances, customer invoice visibility on web/mobile, and finance workspace. GST tax invoice issuance is deliberately disabled pending approved tax/accounting configuration. PostgreSQL tests cover invoice replay, customer scoping, duplicate receipt references, over-allocation and credit notes. CI run 45254741566 passed 4/4.
+- Offers and loyalty: admin-approved coupon activation, fixed/percentage discounts, minimum basket, date window, per-customer/global quota checks under row lock, order pricing snapshots, quota restoration on eligible cancellation, and explicit coupon/loyalty stacking control. Web/mobile checkout validates and applies offers.
+- Loyalty: finance-configured and approved programme rates, points earned only after verified delivery, customer wallet and ledger on web/mobile, points redemption at checkout, balance and per-order cap enforcement, idempotent manual adjustments, and automatic point reversal when an eligible order is cancelled.
+- Migrations 0015–0016 preserve the older single-organisation offer/loyalty tables as `legacy_offer_redemptions`, `legacy_loyalty_accounts`, and `legacy_loyalty_ledger`; historical rows have not yet been mapped into the new supplier/customer scoped model and require a reviewed conversion plan.
+- Latest CI run 45259257726 passed 4/4 jobs: API/Web, PostgreSQL lifecycle/negative tests, Expo mobile, and Chromium browser UAT.
 
 ## Completion sequence
 
