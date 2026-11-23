@@ -42,6 +42,7 @@ async function mockApi(page:Page,roles:string[]|null){
   if(p==='/v1/finance/invoices')return ok([]);
   if(p==='/v1/finance/ready-orders')return ok([]);
   if(p==='/v1/finance/summary')return ok({invoices:{invoice_count:0,invoiced_paise:0,outstanding_paise:0},receipts:{received_paise:0,receipt_count:0},credits:{approved_credit_paise:0},taxInvoiceIssuingEnabled:false});
+  if(p==='/v1/promotions/validate')return ok({code:'WELCOME10',name:'Welcome offer',discountType:'PERCENT_BPS',discountValue:1000,maxDiscountPaise:1000,minimumSubtotalPaise:0});
 
   if(p.startsWith('/v1/quotes/')&&p.endsWith('/accept'))return ok({id:'99999999-9999-4999-8999-999999999998',replayed:false},201);
   if(p.startsWith('/v1/quotes/')&&p.endsWith('/reject'))return ok({ok:true});
@@ -174,6 +175,14 @@ test('customer: role-scoped buying catalogue has no admin overview or staff cont
  await expect(page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('button',{name:'Staff'})).toHaveCount(0);
  await assertNoHorizontalOverflow(page);
  await page.screenshot({path:info.outputPath('customer-catalogue.png'),fullPage:true});
+});
+test('customer can validate a coupon before order confirmation',async({page})=>{
+ await mockApi(page,['CUSTOMER_BUYER']);
+ await page.goto('/');await signin(page);
+ await expect(page.getByRole('heading',{name:'Prepared vegetables'})).toBeVisible();
+ await page.getByLabel('Offer code').fill('WELCOME10');
+ await page.getByRole('button',{name:'Apply offer'}).click();
+ await expect(page.locator('.fp-customer-promotion')).toContainText('Offer WELCOME10 applied');
 });
 test('customer can request a quote and review its proposal queue',async({page})=>{
  await mockApi(page,['CUSTOMER_BUYER']);
