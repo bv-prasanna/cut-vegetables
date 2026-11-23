@@ -10,7 +10,7 @@ type Env={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const uuid=z.string().uuid();
 const categories=['QUALITY','SHORTAGE','WRONG_ITEM','LATE_DELIVERY','PACKAGING','BILLING','RETURN_REQUEST','OTHER'] as const;
 const createSchema=z.object({orderId:uuid,category:z.enum(categories),description:z.string().trim().min(10).max(4000),requestedResolution:z.string().trim().max(1000).optional(),event:geoEventSchema});
-const updateSchema=z.object({state:z.enum(['IN_REVIEW','WAITING_CUSTOMER','RESOLVED','REJECTED','CLOSED']),resolutionNote:z.string().trim().max(2000).optional()});
+const updateSchema=z.object({state:z.enum(['IN_REVIEW','WAITING_CUSTOMER','RESOLVED','REJECTED','CLOSED']),resolutionNote:z.string().trim().max(2000).optional(),resolutionType:z.enum(['RESUPPLY','REPLACEMENT','CREDIT_NOTE','REFUND','NO_ACTION']).optional()});
 export function createSupportRoutes(pool:Pool){
  const app=new Hono<Env>();
  app.onError((err,c)=>{const e=respondError(err);if(e.status===500)console.error('Support API failed',err);return c.json({error:e.message},e.status);});
@@ -53,14 +53,14 @@ export function createSupportRoutes(pool:Pool){
   if(!id.success)throw new BusinessFailure(400,'Invalid support case ID');
   const body=updateSchema.safeParse(await c.req.json().catch(()=>null));
   if(!body.success)throw new BusinessFailure(400,'Invalid support case update');
-  const org=c.get('organizationId'),{state,resolutionNote}=body.data;
+  const org=c.get('organizationId'),{state,resolutionNote,resolutionType}=body.data;
   const result=await inTransaction(pool,async tx=>{
    const current=await tx.query<{id:string;state:string;buyer_organization_id:string}>('SELECT id,state,buyer_organization_id FROM support_cases WHERE id=$1 AND producer_organization_id=$2 FOR UPDATE',[id.data,org]);
    if(!current.rowCount)throw new BusinessFailure(404,'Support case not found');
    if(['RESOLVED','REJECTED','CLOSED'].includes(current.rows[0].state))throw new BusinessFailure(409,'This case is already closed. Reopen it through an authorised supervisor workflow.');
    if(['RESOLVED','REJECTED'].includes(state)&&(!resolutionNote||resolutionNote.length<5))throw new BusinessFailure(422,'A clear resolution note of at least 5 characters is required');
    const terminal=['RESOLVED','REJECTED','CLOSED'].includes(state);
-   const q=await tx.query('UPDATE support_cases SET state=$3,resolution_note=COALESCE($4,resolution_note),assigned_to=COALESCE(assigned_to,$5),resolved_by=CASE WHEN $6 THEN $5 ELSE resolved_by END,resolved_at=CASE WHEN $6 THEN now() ELSE resolved_at END,updated_at=now() WHERE id=$1 AND producer_organization_id=$2 RETURNING id,case_number,order_id,state,resolution_note,updated_at',[id.data,org,state,resolutionNote??null,c.get('userId'),terminal]);
+   const q=await tx.query('UPDATE support_cases SET state=$3,resolution_note=COALESCE($4,resolution_note),assigned_to=COALESCE(assigned_to,$5),resolved_by=CASE WHEN $6 THEN $5 ELSE resolved_by END,resolved_at=CASE WHEN $6 THEN now() ELSE resolved_at END,resolution_type=COALESCE($7,resolution_type),updated_at=now() WHERE id=$1 AND producer_organization_id=$2 RETURNING id,case_number,order_id,state,resolution_note,resolution_type,updated_at',[id.data,org,state,resolutionNote??null,c.get('userId'),terminal,resolutionType??null]);
    await recordEvent(tx,org,c.get('userId'),systemEvent('SUPPORT_CASE_'+state,'SUPPORT_CASE',id.data),'SUPPORT_CASE_'+state,'SUPPORT_CASE',id.data);
    await notifyOrganization(tx,current.rows[0].buyer_organization_id,['CUSTOMER_ADMIN','CUSTOMER_BUYER'],'SUPPORT','Support case updated','Your support case status is now '+state.replaceAll('_',' ').toLowerCase()+'. '+(resolutionNote??''),'SUPPORT_CASE',id.data,'SUPPORT_CASE_STATUS:'+id.data+':'+state,{state});
    return q.rows[0];
