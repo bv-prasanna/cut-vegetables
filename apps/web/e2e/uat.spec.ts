@@ -44,6 +44,7 @@ async function mockApi(page:Page,roles:string[]|null){
   if(p==='/v1/finance/summary')return ok({invoices:{invoice_count:0,invoiced_paise:0,outstanding_paise:0},receipts:{received_paise:0,receipt_count:0},credits:{approved_credit_paise:0},taxInvoiceIssuingEnabled:false});
   if(p==='/v1/admin/loyalty/program')return ok(null);
   if(p==='/v1/admin/loyalty/accounts')return ok([]);
+  if(p==='/v1/loyalty/me')return ok({balancePoints:45,programActive:true,paisePerPoint:10,minimumRedeemPoints:1,maximumDiscountBps:1000,entries:[{entry_type:'EARN',points_delta:45,note:'UAT delivery reward',created_at:'2026-11-24T00:00:00.000Z'}]});
   if(p==='/v1/promotions/validate')return ok({code:'WELCOME10',name:'Welcome offer',discountType:'PERCENT_BPS',discountValue:1000,maxDiscountPaise:1000,minimumSubtotalPaise:0});
 
   if(p.startsWith('/v1/quotes/')&&p.endsWith('/accept'))return ok({id:'99999999-9999-4999-8999-999999999998',replayed:false},201);
@@ -175,6 +176,9 @@ test('customer: role-scoped buying catalogue has no admin overview or staff cont
  await expect(page.getByText('Carrot',{exact:true})).toBeVisible();
  await expect(page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('button',{name:'Overview'})).toHaveCount(0);
  await expect(page.getByRole('navigation',{name:'Workspace navigation'}).getByRole('button',{name:'Staff'})).toHaveCount(0);
+ await page.getByRole('button',{name:'Orders & schedules'}).click();
+ await expect(page.getByRole('heading',{name:'Rewards balance'})).toBeVisible();
+ await expect(page.getByText('45 points')).toBeVisible();
  await assertNoHorizontalOverflow(page);
  await page.screenshot({path:info.outputPath('customer-catalogue.png'),fullPage:true});
 });
