@@ -44,6 +44,7 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const [supportOrder,setSupportOrder]=useState(''),[supportCategory,setSupportCategory]=useState('QUALITY'),[supportDescription,setSupportDescription]=useState(''),[supportResolution,setSupportResolution]=useState('');
  const [view,setView]=useState<'Order'|'Recurring'|'History'>('Order');
  const [search,setSearch]=useState(''),[basket,setBasket]=useState<Record<string,number>>({});
+ const [promotionCode,setPromotionCode]=useState(''),[promotion,setPromotion]=useState<{code:string;name:string;discountType:'FIXED_PAISE'|'PERCENT_BPS';discountValue:number;maxDiscountPaise:number|null;minimumSubtotalPaise:number}|null>(null),[promotionMessage,setPromotionMessage]=useState('');
  const [kitchen,setKitchen]=useState(''),[slot,setSlot]=useState(''),[date,setDate]=useState(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}));
  const [frequency,setFrequency]=useState<'DAILY'|'WEEKLY'>('WEEKLY'),[weekdays,setWeekdays]=useState<number[]>([1,2,3,4,5,6]);
  const [status,setStatus]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
@@ -88,11 +89,23 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const selected=useMemo(()=>Object.entries(basket).filter(([,grams])=>grams>0).map(([variantId,grams])=>({variantId,grams})),[basket]);
  const subtotal=selected.reduce((sum,item)=>sum+Math.round((products.find(p=>p.id===item.variantId)?.price_paise_per_kg||0)*item.grams/1000),0);
   const deliveryFee=selected.length?Number(products.find(p=>p.id===selected[0].variantId)?.delivery_fee_paise||0):0;
-  const total=subtotal+deliveryFee;
+  const promotionDiscount=promotion&&subtotal>=promotion.minimumSubtotalPaise?Math.min(subtotal,promotion.discountType==='FIXED_PAISE'?promotion.discountValue:Math.floor(subtotal*promotion.discountValue/10000),promotion.maxDiscountPaise??Number.MAX_SAFE_INTEGER):0;
+  const total=subtotal-promotionDiscount+deliveryFee;
  const selectedKitchen=kitchens.find(k=>k.id===kitchen);
  const suitable=slots.filter(s=>s.zone_code===selectedKitchen?.zone_code);
  function change(v:Product,delta:1|-1){
   setBasket(old=>{const current=old[v.id]||0;const next=nextQuantity(current,v.minimum_grams,v.increment_grams,delta);return {...old,[v.id]:next};});
+ }
+ async function applyPromotion(){
+  if(!kitchen||!promotionCode.trim()){setPromotionMessage('Choose a kitchen and enter an offer code.');return;}
+  setBusy(true);setError('');setPromotionMessage('');
+  try{
+   const result=await call<{code:string;name:string;discountType:'FIXED_PAISE'|'PERCENT_BPS';discountValue:number;maxDiscountPaise:number|null;minimumSubtotalPaise:number}>('/v1/promotions/validate?code='+encodeURIComponent(promotionCode.trim())+'&kitchenId='+encodeURIComponent(kitchen));
+   setPromotion(result);
+   if(subtotal<result.minimumSubtotalPaise)setPromotionMessage('Offer saved. Add '+money(result.minimumSubtotalPaise-subtotal)+' more to meet its minimum order value.');
+   else setPromotionMessage('Offer '+result.code+' applied. Discount will be rechecked when you confirm the order.');
+  }catch(e){setPromotion(null);setPromotionMessage(e instanceof Error?e.message:'Unable to validate offer code.');}
+  finally{setBusy(false);}
  }
  async function submit(recurring:boolean){
   if(!canWrite)return;
@@ -109,16 +122,16 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
     });
     setStatus('Recurring schedule created: '+saved.id+'. Operations must run the generation job before cutoff.');
    }else{
-    const fingerprint=JSON.stringify({kitchen,slot,date,items:[...selected].sort((a,b)=>a.variantId.localeCompare(b.variantId))});
+    const fingerprint=JSON.stringify({kitchen,slot,date,items:[...selected].sort((a,b)=>a.variantId.localeCompare(b.variantId)),promotionCode:promotionDiscount>0?promotion?.code??null:null});
     if(!pendingOrderRef.current||pendingOrderRef.current.fingerprint!==fingerprint){
      pendingOrderRef.current={fingerprint,key:crypto.randomUUID()};
     }
     const key=pendingOrderRef.current.key;
     const saved=await call<{id:string;replayed?:boolean}>('/v1/orders','POST',{
-     kitchenId:kitchen,slotId:slot,deliveryDate:date,idempotencyKey:key,items:selected,event
+     kitchenId:kitchen,slotId:slot,deliveryDate:date,idempotencyKey:key,items:selected,promotionCode:promotionDiscount>0?promotion?.code:undefined,event
     });
     pendingOrderRef.current=null;
-    setStatus((saved.replayed?'Existing order confirmed: ':'Order confirmed: ')+saved.id);setBasket({});
+    setStatus((saved.replayed?'Existing order confirmed: ':'Order confirmed: ')+saved.id);setBasket({});setPromotion(null);setPromotionCode('');setPromotionMessage('');
    }
    await refresh();setView('History');
   }catch(e){setError(e instanceof Error?e.message:'Unable to save');}
@@ -220,7 +233,12 @@ async function setScheduleState(s:Schedule,state:'ACTIVE'|'PAUSED'|'CANCELLED'){
  <label>{view==='Recurring'?'Start date':'Delivery date'}<input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><label>Delivery window<select value={slot} onChange={e=>setSlot(e.target.value)}><option value="">Select a slot</option>{suitable.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
  {view==='Recurring'&&<><label>Frequency<select value={frequency} onChange={e=>setFrequency(e.target.value as 'DAILY'|'WEEKLY')}><option value="DAILY">Daily</option><option value="WEEKLY">Selected weekdays</option></select></label>
  {frequency==='WEEKLY'&&<div className="fp-customer-days">{dayNames.map((n,i)=><button className={weekdays.includes(i)?'selected':''} key={n} onClick={()=>setWeekdays(old=>old.includes(i)?old.filter(x=>x!==i):[...old,i])}>{n}</button>)}</div>}</>}
- <div className="fp-customer-total"><span>Selected products</span><b>{selected.length}</b></div><div className="fp-customer-total"><span>Product subtotal</span><b>{money(subtotal)}</b></div><div className="fp-customer-total"><span>Contract delivery fee</span><b>{money(deliveryFee)}</b></div><div className="fp-customer-total grand"><span>Estimated total incl. delivery</span><b>{money(total)}</b></div>
+ {view==='Order'&&canWrite&&<div className="fp-customer-promotion">
+  <label>Offer code<input value={promotionCode} onChange={e=>{setPromotionCode(e.target.value.toUpperCase());setPromotion(null);setPromotionMessage('')}} placeholder="Enter coupon code" maxLength={32}/></label>
+  <button type="button" disabled={busy||!promotionCode.trim()||!kitchen} onClick={()=>void applyPromotion()}>{busy?'Checking…':'Apply offer'}</button>
+  {promotionMessage&&<small role="status">{promotionMessage}</small>}
+ </div>}
+ <div className="fp-customer-total"><span>Selected products</span><b>{selected.length}</b></div><div className="fp-customer-total"><span>Product subtotal</span><b>{money(subtotal)}</b></div><div className="fp-customer-total"><span>Contract delivery fee</span><b>{money(deliveryFee)}</b></div>{promotionDiscount>0&&<div className="fp-customer-total"><span>Offer discount</span><b>−{money(promotionDiscount)}</b></div>}<div className="fp-customer-total grand"><span>Estimated total incl. delivery</span><b>{money(total)}</b></div>
   {canWrite&&<button className="fp-customer-submit" disabled={busy} onClick={()=>void submit(view==='Recurring')}>{busy?'Processing…':view==='Recurring'?'Create recurring schedule':'Confirm order'}</button>}
   {canRequestQuote&&view==='Order'&&<button className="fp-customer-quote-button" type="button" disabled={busy||!selected.length} onClick={()=>void requestQuote()}>{busy?'Submitting…':'Request a quote'}</button>}
  <small>Prices are indicative until confirmed. Slot capacity and booking cutoff are checked before your order is accepted. Recurring orders are generated before each cutoff by operations.</small></aside></div>}
