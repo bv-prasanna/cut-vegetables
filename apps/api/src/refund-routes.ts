@@ -17,6 +17,11 @@ export function createRefundRoutes(pool:Pool){
   const q=await pool.query('SELECT r.id,r.refund_number,r.invoice_id,r.support_case_id,r.buyer_organization_id,o.name AS buyer_name,r.amount_paise,r.method,r.status,r.reason,r.external_reference,r.failure_note,r.created_at,r.refunded_at FROM refund_requests r JOIN organizations o ON o.id=r.buyer_organization_id WHERE r.producer_organization_id=$1 ORDER BY r.created_at DESC LIMIT 500',[c.get('organizationId')]);
   return c.json(q.rows);
  });
+ app.get('/finance/refunds/candidates',async c=>{
+  permission(c.get('roles'),'finance:read');
+  const q=await pool.query("SELECT sc.id AS support_case_id,sc.case_number,sc.order_id,fi.id AS invoice_id,fi.invoice_number,b.name AS buyer_name,COALESCE(paid.paid_paise,0)::bigint-COALESCE(reserved.reserved_paise,0)::bigint AS available_paise FROM support_cases sc JOIN finance_invoices fi ON fi.order_id=sc.order_id AND fi.producer_organization_id=sc.producer_organization_id AND fi.buyer_organization_id=sc.buyer_organization_id JOIN organizations b ON b.id=sc.buyer_organization_id LEFT JOIN LATERAL(SELECT sum(a.amount_paise) AS paid_paise FROM finance_allocations a JOIN finance_receipts r ON r.id=a.receipt_id WHERE a.invoice_id=fi.id) paid ON true LEFT JOIN LATERAL(SELECT sum(amount_paise) AS reserved_paise FROM refund_requests WHERE invoice_id=fi.id AND status IN ('REQUESTED','APPROVED','PROCESSING','REFUNDED')) reserved ON true WHERE sc.producer_organization_id=$1 AND sc.state='RESOLVED' AND sc.resolution_type='REFUND' AND COALESCE(paid.paid_paise,0)>COALESCE(reserved.reserved_paise,0) ORDER BY sc.updated_at DESC LIMIT 200",[c.get('organizationId')]);
+  return c.json(q.rows);
+ });
  app.get('/finance/refunds/me',async c=>{
   permission(c.get('roles'),'invoices:read');
   const q=await pool.query('SELECT r.id,r.refund_number,r.invoice_id,r.support_case_id,r.amount_paise,r.method,r.status,r.reason,r.external_reference,r.failure_note,r.created_at,r.refunded_at FROM refund_requests r WHERE r.buyer_organization_id=$1 ORDER BY r.created_at DESC LIMIT 200',[c.get('organizationId')]);
