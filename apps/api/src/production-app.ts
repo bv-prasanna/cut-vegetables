@@ -206,9 +206,9 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
    const subtotal=data.items.reduce((sum,item)=>sum+Math.round(prices.get(item.variantId)!.price_paise_per_kg*item.grams/1000),0);
    if(subtotal<Number(pricing.contract.minimum_order_value_paise)){await client.query('ROLLBACK');return c.json(reject('Order is below the contracted minimum order value'),422);}
    const deliveryFee=Number(pricing.contract.delivery_fee_paise);
-   let discount=0,promotionId:string|null=null,promotionSnapshot:Record<string,unknown>|null=null;
+   let discount=0,promotionId:string|null=null,promotionSnapshot:Record<string,unknown>|null=null,promotionStackingAllowed=false;
    if(data.promotionCode){
-    const offerQ=await client.query('SELECT id,code,status,discount_type,discount_value,max_discount_paise,minimum_subtotal_paise,starts_at,ends_at,max_redemptions,per_buyer_limit FROM customer_offers WHERE producer_organization_id=$1 AND code=$2 FOR UPDATE',[kitchen.rows[0].producer_organization_id,data.promotionCode.toUpperCase()]);
+    const offerQ=await client.query('SELECT id,code,status,discount_type,discount_value,max_discount_paise,minimum_subtotal_paise,starts_at,ends_at,max_redemptions,per_buyer_limit,stacking_allowed FROM customer_offers WHERE producer_organization_id=$1 AND code=$2 FOR UPDATE',[kitchen.rows[0].producer_organization_id,data.promotionCode.toUpperCase()]);
     if(!offerQ.rowCount){await client.query('ROLLBACK');return c.json(reject('Offer code is not valid for this supplier'),422);}
     const offer=offerQ.rows[0],now=clock();
     if(offer.status!=='ACTIVE'||new Date(offer.starts_at)>now||new Date(offer.ends_at)<=now){await client.query('ROLLBACK');return c.json(reject('This offer is not currently available'),409);}
@@ -220,11 +220,12 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
     if(offer.max_discount_paise!==null)discount=Math.min(discount,Number(offer.max_discount_paise));
     discount=Math.min(subtotal,discount);
     if(discount<=0){await client.query('ROLLBACK');return c.json(reject('Offer does not produce a valid discount'),422);}
-    promotionId=offer.id;
+    promotionId=offer.id;promotionStackingAllowed=Boolean(offer.stacking_allowed);
     promotionSnapshot={code:offer.code,discountType:offer.discount_type,discountValue:offer.discount_value,discountPaise:discount};
    }
    let loyaltyPointsRedeemed=0,loyaltyDiscountPaise=0,loyaltyAccountId:string|null=null;
    if((data.loyaltyPoints??0)>0){
+    if(promotionId&&!promotionStackingAllowed){await client.query('ROLLBACK');return c.json(reject('This offer cannot be combined with loyalty point redemption'),409);}
     loyaltyPointsRedeemed=data.loyaltyPoints??0;
     const program=await client.query("SELECT paise_per_point,minimum_redeem_points,maximum_discount_bps FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE' FOR UPDATE",[kitchen.rows[0].producer_organization_id]);
     if(!program.rowCount){await client.query('ROLLBACK');return c.json(reject('An approved loyalty programme is not active for this supplier'),409);}
