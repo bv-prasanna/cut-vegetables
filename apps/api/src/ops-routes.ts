@@ -3,7 +3,7 @@ import {z} from 'zod';
 import type {Pool} from 'pg';
 import {canAny,type Role} from './authorization.js';
 import {geoEventSchema} from './geo-events.js';
-import {BusinessFailure,inTransaction,recordEvent,requireRow,respondError} from './ops-db.js';
+import {BusinessFailure,inTransaction,recordEvent,requireRow,respondError,systemEvent} from './ops-db.js';
 import {validateBatchYield} from './workflow.js';
 type Env={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const uuid=z.string().uuid();
