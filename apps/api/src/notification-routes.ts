@@ -2,7 +2,8 @@ import {Hono} from 'hono';
 import {z} from 'zod';
 import type {Pool} from 'pg';
 import {BusinessFailure,respondError} from './ops-db.js';
-type Env={Variables:{userId:string;organizationId:string;roles:string[]}};
+import type {Role} from './authorization.js';
+type Env={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const category=z.enum(['ORDER','DELIVERY','SUPPORT','FINANCE','LOYALTY','SYSTEM']);
 export function createNotificationRoutes(pool:Pool){
  const app=new Hono<Env>();
