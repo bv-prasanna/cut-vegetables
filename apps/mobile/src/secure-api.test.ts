@@ -32,6 +32,9 @@ describe('secure mobile environment',()=>{
   expect(screenPermissions(['CUSTOMER_VIEWER'])).toContain('Invoices');
   expect(screenPermissions(['CUSTOMER_BUYER'])).toContain('Wallet');
   expect(screenPermissions(['CUSTOMER_VIEWER'])).toContain('Wallet');
+  expect(screenPermissions(['CUSTOMER_BUYER'])).toContain('Refunds');
+  expect(screenPermissions(['CUSTOMER_VIEWER'])).toContain('Refunds');
+  expect(screenPermissions(['DRIVER'])).not.toContain('Refunds');
   expect(screenPermissions(['DRIVER'])).not.toContain('Finance');
   expect(screenPermissions(['DRIVER'])).not.toContain('Wallet');
  });
