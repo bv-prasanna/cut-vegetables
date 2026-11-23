@@ -1,7 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {apiRequest,FriendlyApiError} from './api-errors';
 import './finance-admin.css';
-type Invoice={id:string;invoice_number:number;order_id:string;buyer_organization_id:string;buyer_name?:string;status:string;subtotal_paise:number;delivery_fee_paise:number;discount_paise:number;tax_paise:number;total_paise:number;tax_policy_status:string;created_at:string;paid_paise:number};
+type Invoice={id:string;invoice_number:number;order_id:string;buyer_organization_id:string;buyer_name?:string;status:string;subtotal_paise:number;delivery_fee_paise:number;discount_paise:number;tax_paise:number;total_paise:number;tax_policy_status:string;created_at:string;paid_paise:number;credited_paise:number};
 type ReadyOrder={id:string;delivery_date:string;total_paise:number;buyer_name:string;kitchen_name:string};
 type Summary={invoices:{invoice_count:number;invoiced_paise:number;outstanding_paise:number};receipts:{received_paise:number;receipt_count:number};credits:{approved_credit_paise:number};taxInvoiceIssuingEnabled:boolean};
 const money=(paise:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(Number(paise||0)/100);
@@ -49,9 +49,9 @@ export default function FinanceAdmin({base,token,onSessionExpired}:{base:string;
    </section>
   </div>
   <section className="fp-finance-panel fp-finance-wide"><header><div><h3>Invoice register</h3><p>Order-linked provisional documents and collection status.</p></div><span>{invoices.length} records</span></header>
-   <div className="fp-finance-table-wrap"><table><thead><tr><th>Document</th><th>Customer</th><th>Order</th><th>Status</th><th>Total</th><th>Paid</th><th>Balance</th></tr></thead><tbody>
-    {invoices.map(i=><tr key={i.id}><td>#{i.invoice_number}<small>{new Date(i.created_at).toLocaleDateString('en-IN')}</small></td><td>{i.buyer_name||i.buyer_organization_id.slice(0,8)}</td><td>{i.order_id.slice(0,8)}</td><td><span className="fp-finance-status">{i.status}</span><small>{i.tax_policy_status.replaceAll('_',' ')}</small></td><td>{money(i.total_paise)}</td><td>{money(i.paid_paise)}</td><td>{money(Number(i.total_paise)-Number(i.paid_paise))}</td></tr>)}
-    {!invoices.length&&<tr><td colSpan={7}>No invoices recorded yet.</td></tr>}
+   <div className="fp-finance-table-wrap"><table><thead><tr><th>Document</th><th>Customer</th><th>Order</th><th>Status</th><th>Total</th><th>Paid</th><th>Credits</th><th>Balance</th></tr></thead><tbody>
+    {invoices.map(i=><tr key={i.id}><td>#{i.invoice_number}<small>{new Date(i.created_at).toLocaleDateString('en-IN')}</small></td><td>{i.buyer_name||i.buyer_organization_id.slice(0,8)}</td><td>{i.order_id.slice(0,8)}</td><td><span className="fp-finance-status">{i.status}</span><small>{i.tax_policy_status.replaceAll('_',' ')}</small></td><td>{money(i.total_paise)}</td><td>{money(i.paid_paise)}</td><td>{money(i.credited_paise)}</td><td>{money(Number(i.total_paise)-Number(i.paid_paise)-Number(i.credited_paise))}</td></tr>)}
+    {!invoices.length&&<tr><td colSpan={8}>No invoices recorded yet.</td></tr>}
    </tbody></table></div>
   </section>
   <section className="fp-finance-panel fp-finance-credit"><header><div><h3>Credit note</h3><p>Prepare and approve a traceable credit against an invoice.</p></div></header>
