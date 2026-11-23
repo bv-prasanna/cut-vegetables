@@ -394,6 +394,52 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(persisted.rows[0].resolved_at).toBeTruthy();
  });
 
+ it('creates provisional invoices and enforces receipt allocation and credit-note limits',async()=>{
+  const email='uat-finance@example.invalid',password='Finance-ci-secret-123456';
+  const created=await request('/v1/admin/staff','POST',{email,password,roles:['FINANCE']});
+  expect(created.status).toBe(201);
+  const login=await request('/auth/login','POST',{email,password,organizationId:producerOrg},'');
+  expect(login.status).toBe(200);
+  const financeToken=(await login.json() as Login).accessToken;
+  const invoiceResponse=await request('/v1/finance/invoices/from-order/'+orderId,'POST',{},financeToken);
+  expect(invoiceResponse.status).toBe(201);
+  const invoice=await invoiceResponse.json() as {id:string;total_paise:number;status:string;tax_policy_status:string};
+  expect(invoice).toMatchObject({status:'PROVISIONAL',tax_policy_status:'PENDING_APPROVAL'});
+  const replay=await request('/v1/finance/invoices/from-order/'+orderId,'POST',{},financeToken);
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toMatchObject({id:invoice.id,replayed:true});
+  const customerInvoices=await request('/v1/finance/invoices','GET',undefined,customerToken);
+  expect(customerInvoices.status).toBe(200);
+  expect((await customerInvoices.json() as {id:string}[]).some(row=>row.id===invoice.id)).toBe(true);
+  const noFinance=await request('/v1/finance/summary','GET',undefined,customerToken);
+  expect(noFinance.status).toBe(403);
+  const receipt=await request('/v1/finance/receipts','POST',{
+   buyerOrganizationId:customerOrg,amountPaise:1000,paymentMethod:'UPI',reference:'CI-UPI-RECEIPT-001',
+   receivedOn:new Date().toISOString().slice(0,10),allocations:[{invoiceId:invoice.id,amountPaise:1000}]
+  },financeToken);
+  expect(receipt.status).toBe(201);
+  expect(await receipt.json()).toMatchObject({allocatedPaise:1000,unallocatedPaise:0});
+  const duplicateReference=await request('/v1/finance/receipts','POST',{
+   buyerOrganizationId:customerOrg,amountPaise:1000,paymentMethod:'UPI',reference:'CI-UPI-RECEIPT-001',
+   receivedOn:new Date().toISOString().slice(0,10),allocations:[]
+  },financeToken);
+  expect(duplicateReference.status).toBe(409);
+  const overAllocation=await request('/v1/finance/receipts','POST',{
+   buyerOrganizationId:customerOrg,amountPaise:Number(invoice.total_paise)+1,paymentMethod:'BANK_TRANSFER',
+   receivedOn:new Date().toISOString().slice(0,10),allocations:[{invoiceId:invoice.id,amountPaise:Number(invoice.total_paise)+1}]
+  },financeToken);
+  expect(overAllocation.status).toBe(409);
+  const credit=await request('/v1/finance/invoices/'+invoice.id+'/credit-notes','POST',{
+   amountPaise:100,reason:'Approved shortage credit for the buyer.'
+  },financeToken);
+  expect(credit.status).toBe(201);
+  const creditId=(await credit.json() as {id:string}).id;
+  expect((await request('/v1/finance/credit-notes/'+creditId+'/approve','PATCH',{},financeToken)).status).toBe(200);
+  const issued=await request('/v1/finance/invoices/from-order/'+orderId,'POST',{},financeToken);
+  expect(issued.status).toBe(200);
+  const summary=await request('/v1/finance/summary','GET',undefined,financeToken);
+  expect(summary.status).toBe(200);
+ });
  it('exposes permission-scoped action selectors and keeps driver data assigned-only',async()=>{
   const adminOptions=await request('/v1/ops/action-options');
   expect(adminOptions.status).toBe(200);
