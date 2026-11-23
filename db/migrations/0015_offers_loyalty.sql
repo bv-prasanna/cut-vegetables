@@ -5,6 +5,12 @@ BEGIN;
 ALTER TABLE offer_redemptions RENAME TO legacy_offer_redemptions;
 ALTER TABLE legacy_offer_redemptions RENAME CONSTRAINT offer_redemptions_pkey TO legacy_offer_redemptions_pkey;
 ALTER TABLE legacy_offer_redemptions RENAME CONSTRAINT offer_redemptions_order_id_key TO legacy_offer_redemptions_order_id_key;
+-- 0002_marketing.sql also defined a legacy single-organisation loyalty model; retain its data separately.
+ALTER TABLE loyalty_accounts RENAME TO legacy_loyalty_accounts;
+ALTER TABLE legacy_loyalty_accounts RENAME CONSTRAINT loyalty_accounts_pkey TO legacy_loyalty_accounts_pkey;
+ALTER TABLE loyalty_ledger RENAME TO legacy_loyalty_ledger;
+ALTER TABLE legacy_loyalty_ledger RENAME CONSTRAINT loyalty_ledger_pkey TO legacy_loyalty_ledger_pkey;
+ALTER TABLE legacy_loyalty_ledger RENAME CONSTRAINT loyalty_ledger_idempotency_key_key TO legacy_loyalty_ledger_idempotency_key_key;
 
 CREATE TABLE IF NOT EXISTS customer_offers (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
