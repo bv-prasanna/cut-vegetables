@@ -289,16 +289,32 @@ export function createOperationsRoutes(pool:Pool){
   requirePermission(c,'delivery:pod');
   const input=await body(c,podSchema);
   const data=await inTransaction(pool,async tx=>{
-   const stop=requireRow((await tx.query<{status:string;order_id:string;driver_id:string}>(`SELECT ds.status,ds.order_id,dr.driver_id
-      FROM delivery_stops ds JOIN delivery_runs dr ON dr.id=ds.run_id
-      WHERE ds.id=$1 AND dr.producer_organization_id=$2 FOR UPDATE OF ds`,[idParam(c),c.get('organizationId')])).rows);
+   const stop=requireRow((await tx.query<{status:string;order_id:string;driver_id:string;buyer_organization_id:string;subtotal_paise:number;discount_paise:number}>(`SELECT ds.status,ds.order_id,dr.driver_id,o.organization_id AS buyer_organization_id,o.subtotal_paise,o.discount_paise
+      FROM delivery_stops ds JOIN delivery_runs dr ON dr.id=ds.run_id JOIN orders o ON o.id=ds.order_id
+      WHERE ds.id=$1 AND dr.producer_organization_id=$2 FOR UPDATE OF ds,o`,[idParam(c),c.get('organizationId')])).rows);
    if(stop.driver_id!==c.get('userId'))throw new BusinessFailure(403,'Only the assigned driver can confirm delivery');
    if(!['PENDING','ARRIVED'].includes(stop.status))throw new BusinessFailure(409,'Delivery stop already finalised');
    const eventId=await recordEvent(tx,c.get('organizationId'),c.get('userId'),input.event,'DELIVERY_POD_CAPTURED','DELIVERY_STOP',idParam(c));
    const proof=await tx.query<{id:string}>(`INSERT INTO delivery_proofs(stop_id,received_by,received_at,event_id,note)
      VALUES($1,$2,now(),$3,$4) RETURNING id`,[idParam(c),input.receivedBy,eventId,input.notes??null]);
    await tx.query("UPDATE delivery_stops SET status='DELIVERED',completed_at=now() WHERE id=$1",[idParam(c)]);
-   await tx.query("UPDATE orders SET state='DELIVERED' WHERE id=$1 AND state='DISPATCHED'",[stop.order_id]);
+   const delivered=await tx.query("UPDATE orders SET state='DELIVERED' WHERE id=$1 AND state='DISPATCHED' RETURNING id",[stop.order_id]);
+   if(delivered.rowCount){
+    const program=await tx.query("SELECT points_per_100_rupees FROM loyalty_programs WHERE producer_organization_id=$1 AND status='ACTIVE'",[c.get('organizationId')]);
+    if(program.rowCount){
+     const qualifyingPaise=Math.max(0,Number(stop.subtotal_paise)-Number(stop.discount_paise||0));
+     const points=Math.floor(qualifyingPaise*Number(program.rows[0].points_per_100_rupees)/10000);
+     if(points>0){
+      await tx.query('INSERT INTO loyalty_accounts(producer_organization_id,buyer_organization_id) VALUES($1,$2) ON CONFLICT(producer_organization_id,buyer_organization_id) DO NOTHING',[c.get('organizationId'),stop.buyer_organization_id]);
+      const account=await tx.query('SELECT id FROM loyalty_accounts WHERE producer_organization_id=$1 AND buyer_organization_id=$2 FOR UPDATE',[c.get('organizationId'),stop.buyer_organization_id]);
+      const entry=await tx.query("INSERT INTO loyalty_ledger(account_id,entry_type,points_delta,order_id,idempotency_key,note,created_by) VALUES($1,'EARN',$2,$3,$4,'Points earned on completed delivery',$5) ON CONFLICT(account_id,idempotency_key) DO NOTHING RETURNING id",[account.rows[0].id,points,stop.order_id,'EARN:'+stop.order_id,c.get('userId')]);
+      if(entry.rowCount){
+       await tx.query('UPDATE loyalty_accounts SET balance_points=balance_points+$2,updated_at=now() WHERE id=$1',[account.rows[0].id,points]);
+       await recordEvent(tx,c.get('organizationId'),c.get('userId'),systemEvent('LOYALTY_POINTS_EARNED','LOYALTY_ACCOUNT',account.rows[0].id),'LOYALTY_POINTS_EARNED','LOYALTY_ACCOUNT',account.rows[0].id);
+      }
+     }
+    }
+   }
    return {proofId:proof.rows[0].id,orderId:stop.order_id};
   });
   return c.json(data,201);
