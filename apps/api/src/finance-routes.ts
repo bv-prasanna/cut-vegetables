@@ -72,7 +72,7 @@ export function createFinanceRoutes(pool:Pool){
     const invoice=await tx.query('SELECT id,total_paise,buyer_organization_id FROM finance_invoices WHERE id=$1 AND producer_organization_id=$2 AND status IN (\'PROVISIONAL\',\'ISSUED\') FOR UPDATE',[a.invoiceId,c.get('organizationId')]);
     if(!invoice.rowCount||invoice.rows[0].buyer_organization_id!==d.buyerOrganizationId)throw new BusinessFailure(422,'Every allocated invoice must belong to the selected customer and supplier');
     const paid=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_allocations WHERE invoice_id=$1',[a.invoiceId]);
-    const credits=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_credit_notes WHERE invoice_id=$1 AND status=\'APPROVED\'',[a.invoiceId]);
+    const credits=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_credit_notes WHERE invoice_id=$1 AND status<>\'VOID\'',[a.invoiceId]);
     const outstanding=Number(invoice.rows[0].total_paise)-Number(paid.rows[0].n)-Number(credits.rows[0].n);
     if(a.amountPaise>outstanding)throw new BusinessFailure(409,'Allocation exceeds the invoice outstanding balance');
     await tx.query('INSERT INTO finance_allocations(receipt_id,invoice_id,amount_paise,created_by) VALUES($1,$2,$3,$4)',[receipt.rows[0].id,a.invoiceId,a.amountPaise,c.get('userId')]);allocated+=a.amountPaise;
