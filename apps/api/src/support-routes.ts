@@ -34,6 +34,8 @@ export function createSupportRoutes(pool:Pool){
     'SELECT o.id,o.kitchen_id,k.producer_organization_id FROM orders o JOIN kitchens k ON k.id=o.kitchen_id AND k.organization_id=o.organization_id WHERE o.id=$1 AND o.organization_id=$2 FOR UPDATE OF o',[orderId,org]);
    if(!order.rowCount)throw new BusinessFailure(404,'Order not found in your account');
    const producer=order.rows[0].producer_organization_id;
+   const duplicate=await tx.query("SELECT 1 FROM support_cases WHERE order_id=$1 AND category=$2 AND state IN ('OPEN','IN_REVIEW','WAITING_CUSTOMER')",[orderId,category]);
+   if(duplicate.rowCount)throw new BusinessFailure(409,'An active case already exists for this order and issue category. Add details to the existing case or contact support.');
    if(!producer)throw new BusinessFailure(409,'This kitchen is not assigned to a supplier. Contact support for assistance.');
    const q=await tx.query('INSERT INTO support_cases(buyer_organization_id,producer_organization_id,order_id,kitchen_id,category,description,requested_resolution,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,case_number,order_id,category,state,created_at',[org,producer,orderId,order.rows[0].kitchen_id,category,description,requestedResolution??null,c.get('userId')]);
    const row=q.rows[0] as {id:string};
