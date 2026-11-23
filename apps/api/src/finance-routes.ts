@@ -104,7 +104,7 @@ export function createFinanceRoutes(pool:Pool){
    if(!note.rowCount)throw new BusinessFailure(404,'Credit note not found');
    if(note.rows[0].status!=='DRAFT')throw new BusinessFailure(409,'Only draft credit notes can be approved');
    const paid=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_allocations WHERE invoice_id=$1',[note.rows[0].invoice_id]);
-   const credits=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_credit_notes WHERE invoice_id=$1 AND status<>\\'VOID\\'',[note.rows[0].invoice_id]);
+   const credits=await tx.query('SELECT COALESCE(sum(amount_paise),0)::bigint AS n FROM finance_credit_notes WHERE invoice_id=$1 AND status<>\'VOID\'',[note.rows[0].invoice_id]);
    if(Number(paid.rows[0].n)+Number(credits.rows[0].n)>Number(invoice.rows[0].total_paise))throw new BusinessFailure(409,'Credit note reservations exceed the remaining invoice balance');
    await tx.query('UPDATE finance_credit_notes SET status=\'APPROVED\',approved_by=$2,approved_at=now() WHERE id=$1',[creditId,c.get('userId')]);
    await recordEvent(tx,c.get('organizationId'),c.get('userId'),systemEvent('CREDIT_NOTE_APPROVED','CREDIT_NOTE',creditId),'CREDIT_NOTE_APPROVED','CREDIT_NOTE',creditId);return {id:creditId,status:'APPROVED'};
