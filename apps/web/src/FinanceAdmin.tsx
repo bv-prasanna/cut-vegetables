@@ -3,17 +3,24 @@ import {apiRequest,FriendlyApiError} from './api-errors';
 import './finance-admin.css';
 type Invoice={id:string;invoice_number:number;order_id:string;buyer_organization_id:string;buyer_name?:string;status:string;subtotal_paise:number;delivery_fee_paise:number;discount_paise:number;tax_paise:number;total_paise:number;tax_policy_status:string;created_at:string;paid_paise:number;credited_paise:number};
 type ReadyOrder={id:string;delivery_date:string;total_paise:number;buyer_name:string;kitchen_name:string};
+type LoyaltyProgram={id:string;points_per_100_rupees:number;paise_per_point:number;minimum_redeem_points:number;maximum_discount_bps:number;status:string;approved_at:string|null};
+type LoyaltyAccount={id:string;buyer_organization_id:string;buyer_name:string;balance_points:number};
 type Summary={invoices:{invoice_count:number;invoiced_paise:number;outstanding_paise:number};receipts:{received_paise:number;receipt_count:number};credits:{approved_credit_paise:number};taxInvoiceIssuingEnabled:boolean};
 const money=(paise:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(Number(paise||0)/100);
 export default function FinanceAdmin({base,token,onSessionExpired}:{base:string;token:string;onSessionExpired:()=>void}){
  const [invoices,setInvoices]=useState<Invoice[]>([]),[ready,setReady]=useState<ReadyOrder[]>([]),[summary,setSummary]=useState<Summary|null>(null);
+ const [loyaltyProgram,setLoyaltyProgram]=useState<LoyaltyProgram|null>(null),[loyaltyAccounts,setLoyaltyAccounts]=useState<LoyaltyAccount[]>([]);
+ const [earnRate,setEarnRate]=useState(''),[pointValue,setPointValue]=useState(''),[minimumPoints,setMinimumPoints]=useState(''),[maxRedeem,setMaxRedeem]=useState('');
+ const [adjustBuyer,setAdjustBuyer]=useState(''),[adjustDelta,setAdjustDelta]=useState(''),[adjustReason,setAdjustReason]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const [buyerId,setBuyerId]=useState(''),[amount,setAmount]=useState(''),[method,setMethod]=useState('UPI'),[reference,setReference]=useState(''),[receivedOn,setReceivedOn]=useState(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}));
  const [selectedInvoice,setSelectedInvoice]=useState(''),[creditAmount,setCreditAmount]=useState(''),[creditReason,setCreditReason]=useState('');
  const call=useCallback(async<T,>(path:string,method='GET',payload?:unknown)=>apiRequest<T>(base,path,{token,method,payload}),[base,token]);
  const refresh=useCallback(async()=>{
-  const [i,r,s]=await Promise.all([call<Invoice[]>('/v1/finance/invoices'),call<ReadyOrder[]>('/v1/finance/ready-orders'),call<Summary>('/v1/finance/summary')]);
-  setInvoices(i);setReady(r);setSummary(s);
+  const [i,r,s,program,accounts]=await Promise.all([call<Invoice[]>('/v1/finance/invoices'),call<ReadyOrder[]>('/v1/finance/ready-orders'),call<Summary>('/v1/finance/summary'),call<LoyaltyProgram|null>('/v1/admin/loyalty/program'),call<LoyaltyAccount[]>('/v1/admin/loyalty/accounts')]);
+  setInvoices(i);setReady(r);setSummary(s);setLoyaltyProgram(program);setLoyaltyAccounts(accounts);
+  if(program){setEarnRate(String(program.points_per_100_rupees));setPointValue(String(program.paise_per_point));setMinimumPoints(String(program.minimum_redeem_points));setMaxRedeem(String(Number(program.maximum_discount_bps)/100));}
+  if(!adjustBuyer&&accounts[0]?.buyer_organization_id)setAdjustBuyer(accounts[0].buyer_organization_id);
   if(!buyerId&&i[0]?.buyer_organization_id)setBuyerId(i[0].buyer_organization_id);
   if(!selectedInvoice&&i[0]?.id)setSelectedInvoice(i[0].id);
  },[call,buyerId,selectedInvoice]);
@@ -22,6 +29,10 @@ export default function FinanceAdmin({base,token,onSessionExpired}:{base:string;
  async function action(task:()=>Promise<unknown>,success:string){setBusy(true);setError('');setMessage('');try{await task();await refresh();setMessage(success);}catch(e){if(e instanceof FriendlyApiError&&e.status===401)onSessionExpired();setError(e instanceof Error?e.message:'Finance operation failed');}finally{setBusy(false);}}
  async function createInvoice(id:string){await action(()=>call('/v1/finance/invoices/from-order/'+id,'POST',{}),'Provisional invoice created. It is not a GST tax invoice.');}
  async function recordReceipt(e:React.FormEvent){e.preventDefault();if(!buyerId||!amount||Number(amount)<=0){setError('Select a customer and enter a valid amount.');return;}await action(()=>call('/v1/finance/receipts','POST',{buyerOrganizationId:buyerId,amountPaise:Math.round(Number(amount)*100),paymentMethod:method,reference:reference.trim()||undefined,receivedOn,allocations:selectedInvoice?[{invoiceId:selectedInvoice,amountPaise:Math.round(Number(amount)*100)}]:[]}),'Payment receipt recorded. Review any unallocated amount before closing the day.');setAmount('');setReference('');}
+ async function saveLoyalty(e:React.FormEvent){e.preventDefault();if(!earnRate||!pointValue||!minimumPoints||!maxRedeem){setError('Complete all loyalty programme values.');return;}await action(()=>call('/v1/admin/loyalty/program','PUT',{pointsPer100Rupees:Number(earnRate),paisePerPoint:Math.round(Number(pointValue)*100),minimumRedeemPoints:Number(minimumPoints),maximumDiscountBps:Math.round(Number(maxRedeem)*100)}),'Loyalty programme saved as a draft. Approval is required before points can be earned.');
+ }
+ async function approveLoyalty(){await action(()=>call('/v1/admin/loyalty/program/approve','PATCH',{}),'Loyalty programme approved and activated.');}
+ async function adjustLoyalty(e:React.FormEvent){e.preventDefault();if(!adjustBuyer||!adjustDelta||!adjustReason.trim()){setError('Select a customer and provide a points adjustment reason.');return;}await action(()=>call('/v1/admin/loyalty/adjustments','POST',{buyerOrganizationId:adjustBuyer,pointsDelta:Number(adjustDelta),idempotencyKey:'manual-'+Date.now()+'-'+Math.random().toString(36).slice(2),note:adjustReason.trim()}),'Loyalty adjustment recorded in the immutable ledger.');setAdjustDelta('');setAdjustReason('');}
  async function createCredit(e:React.FormEvent){e.preventDefault();if(!selectedInvoice||!creditAmount||creditReason.trim().length<5){setError('Choose an invoice, amount and reason (at least 5 characters).');return;}await action(async()=>{const note=await call<{id:string}>('/v1/finance/invoices/'+selectedInvoice+'/credit-notes','POST',{amountPaise:Math.round(Number(creditAmount)*100),reason:creditReason.trim()});await call('/v1/finance/credit-notes/'+note.id+'/approve','PATCH',{});},'Credit note approved and recorded in the audit ledger.');setCreditAmount('');setCreditReason('');}
  return <section className="fp-finance">
   <div className="fp-finance-heading"><div><span className="fp-finance-kicker">FINANCE CONTROL</span><h2>Invoices, collections & credits</h2><p>Reconcile delivered orders, record receipts and track outstanding balances.</p></div><button type="button" onClick={()=>void action(refresh,'Finance data refreshed.')} disabled={busy}>↻ Refresh</button></div>
@@ -61,5 +72,24 @@ export default function FinanceAdmin({base,token,onSessionExpired}:{base:string;
     <button type="submit" disabled={busy||!selectedInvoice||!creditAmount||creditReason.trim().length<5}>Approve credit note</button>
    </form>
   </section>
+  <div className="fp-finance-columns">
+   <section className="fp-finance-panel"><header><div><h3>Loyalty programme</h3><p>Rates remain inactive until approved. No default earning or redemption values are assumed.</p></div><span>{loyaltyProgram?.status||'NOT CONFIGURED'}</span></header>
+    <form className="fp-finance-form" onSubmit={e=>void saveLoyalty(e)}>
+     <div className="fp-finance-form-row"><label>Points per ₹100 spent<input required type="number" min="1" value={earnRate} onChange={e=>setEarnRate(e.target.value)}/></label><label>Value per point (₹)<input required type="number" min="0.01" step="0.01" value={pointValue} onChange={e=>setPointValue(e.target.value)}/></label></div>
+     <div className="fp-finance-form-row"><label>Minimum redemption points<input required type="number" min="1" value={minimumPoints} onChange={e=>setMinimumPoints(e.target.value)}/></label><label>Maximum discount per order (%)<input required type="number" min="0.01" max="100" step="0.01" value={maxRedeem} onChange={e=>setMaxRedeem(e.target.value)}/></label></div>
+     <button type="submit" disabled={busy}>Save programme draft</button>
+     {loyaltyProgram?.status==='DRAFT'&&<button type="button" disabled={busy} onClick={()=>void approveLoyalty()}>Approve and activate</button>}
+    </form>
+   </section>
+   <section className="fp-finance-panel"><header><div><h3>Customer points accounts</h3><p>Balances are earned after verified delivery. Adjustments are audited.</p></div><span>{loyaltyAccounts.length} accounts</span></header>
+    {loyaltyAccounts.map(account=><div className="fp-finance-order" key={account.id}><div><strong>{account.buyer_name}</strong><small>{account.buyer_organization_id.slice(0,8)}</small></div><b>{account.balance_points} pts</b></div>)}
+    {!loyaltyAccounts.length&&<p className="fp-finance-empty">No customer points accounts yet.</p>}
+    <form className="fp-finance-form" onSubmit={e=>void adjustLoyalty(e)}>
+     <label>Customer<select required value={adjustBuyer} onChange={e=>setAdjustBuyer(e.target.value)}><option value="">Select customer</option>{loyaltyAccounts.map(account=><option key={account.id} value={account.buyer_organization_id}>{account.buyer_name}</option>)}</select></label>
+     <div className="fp-finance-form-row"><label>Points adjustment (+ / −)<input required type="number" step="1" value={adjustDelta} onChange={e=>setAdjustDelta(e.target.value)}/></label><label>Reason<input required minLength={5} value={adjustReason} onChange={e=>setAdjustReason(e.target.value)}/></label></div>
+     <button type="submit" disabled={busy||!adjustBuyer||!adjustDelta||adjustReason.trim().length<5}>Record adjustment</button>
+    </form>
+   </section>
+  </div>
  </section>;
 }
