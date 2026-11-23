@@ -18,6 +18,13 @@ describe('secure mobile environment',()=>{
   expect(buyer).not.toContain('Delivery');
   expect(buyer).not.toContain('Packing');
  });
+ it('exposes support history only to customer and authorised support roles',()=>{
+  expect(screenPermissions(['CUSTOMER_BUYER'])).toContain('Support');
+  expect(screenPermissions(['CUSTOMER_VIEWER'])).toContain('Support');
+  expect(screenPermissions(['ADMIN'])).toContain('Support');
+  expect(screenPermissions(['SALES'])).toContain('Support');
+  expect(screenPermissions(['DRIVER'])).not.toContain('Support');
+ });
  it('restricts cutting, packing and driver menus to verified role claims',()=>{
   expect(screenPermissions(['OPERATOR'])).toContain('Cutting');
   expect(screenPermissions(['PACKER'])).toContain('Packing');
