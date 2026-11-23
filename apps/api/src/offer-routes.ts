@@ -64,7 +64,7 @@ export function createOfferRoutes(pool:Pool){
   ]);
   if(o.max_redemptions!==null&&global.rows[0].n>=o.max_redemptions)throw new BusinessFailure(409,'This offer has reached its redemption limit');
   if(buyer.rows[0].n>=o.per_buyer_limit)throw new BusinessFailure(409,'Your organisation has already used this offer the maximum number of times');
-  return c.json({code:o.code,name:o.name,discountType:o.discount_type,discountValue:o.discount_value,maxDiscountPaise:o.max_discount_paise,minimumSubtotalPaise:o.minimum_subtotal_paise});
+  return c.json({code:o.code,name:o.name,discountType:o.discount_type,discountValue:Number(o.discount_value),maxDiscountPaise:o.max_discount_paise===null?null:Number(o.max_discount_paise),minimumSubtotalPaise:Number(o.minimum_subtotal_paise)});
  });
  return app;
 }
