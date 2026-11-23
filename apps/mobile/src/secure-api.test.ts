@@ -25,6 +25,13 @@ describe('secure mobile environment',()=>{
   expect(screenPermissions(['SALES'])).toContain('Support');
   expect(screenPermissions(['DRIVER'])).not.toContain('Support');
  });
+ it('exposes finance and invoice screens only to the appropriate account roles',()=>{
+  expect(screenPermissions(['FINANCE'])).toContain('Finance');
+  expect(screenPermissions(['FINANCE'])).not.toContain('Administration');
+  expect(screenPermissions(['CUSTOMER_BUYER'])).toContain('Invoices');
+  expect(screenPermissions(['CUSTOMER_VIEWER'])).toContain('Invoices');
+  expect(screenPermissions(['DRIVER'])).not.toContain('Finance');
+ });
  it('restricts cutting, packing and driver menus to verified role claims',()=>{
   expect(screenPermissions(['OPERATOR'])).toContain('Cutting');
   expect(screenPermissions(['PACKER'])).toContain('Packing');
