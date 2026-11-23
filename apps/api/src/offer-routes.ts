@@ -7,7 +7,7 @@ type Env={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const offerInput=z.object({
  code:z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9_-]+$/).transform(v=>v.toUpperCase()),
  name:z.string().trim().min(3).max(120),description:z.string().trim().max(500).optional(),
- discountType:z.enum(['FIXED_PAISE','PERCENT_BPS']),discountValue:z.number().int().positive().max(10000),
+ discountType:z.enum(['FIXED_PAISE','PERCENT_BPS']),discountValue:z.number().int().positive().max(100_000_000),
  maxDiscountPaise:z.number().int().positive().optional(),minimumSubtotalPaise:z.number().int().nonnegative().default(0),
  startsAt:z.string().datetime(),endsAt:z.string().datetime(),maxRedemptions:z.number().int().positive().optional(),
  perBuyerLimit:z.number().int().positive().max(100).default(1)
