@@ -200,9 +200,11 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(db.rows[0]).toMatchObject({state:'CANCELLED',reservations:'0'});
   const afterReversal=await request('/v1/orders','POST',{kitchenId,slotId,deliveryDate,idempotencyKey:'integration-after-coupon-reversal-0001',items:[{variantId,grams}],promotionCode:'CI10',event},customerToken);
   expect(afterReversal.status).toBe(201);
+  const afterReversalId=(await afterReversal.json() as {id:string}).id;
+  expect((await request('/v1/orders/'+afterReversalId+'/cancel','POST',{},customerToken)).status).toBe(200);
   const quota=await pool.query<{total:string;active:string}>('SELECT count(*)::text AS total,count(*) FILTER(WHERE reversed_at IS NULL)::text AS active FROM offer_redemptions WHERE offer_id=(SELECT id FROM customer_offers WHERE producer_organization_id=$1 AND code=$2)',[producerOrg,'CI10']);
   expect(Number(quota.rows[0].total)).toBe(3);
-  expect(Number(quota.rows[0].active)).toBe(2);
+  expect(Number(quota.rows[0].active)).toBe(1);
   expect((await request('/v1/orders/'+id+'/cancel','POST',{},'')).status).toBe(401);
  });
 
