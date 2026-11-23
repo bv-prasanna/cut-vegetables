@@ -42,7 +42,7 @@ export default function FinanceAdmin({base,token,onSessionExpired}:{base:string;
      <label>Customer<select required value={buyerId} onChange={e=>setBuyerId(e.target.value)}><option value="">Select customer</option>{buyers.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
      <label>Allocate to invoice<select value={selectedInvoice} onChange={e=>setSelectedInvoice(e.target.value)}><option value="">Leave unallocated</option>{invoices.filter(i=>i.buyer_organization_id===buyerId).map(i=><option key={i.id} value={i.id}>#{i.invoice_number} · {money(i.total_paise)}</option>)}</select></label>
      <div className="fp-finance-form-row"><label>Amount (₹)<input required type="number" min="0.01" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)}/></label><label>Method<select value={method} onChange={e=>setMethod(e.target.value)}>{['UPI','BANK_TRANSFER','CASH','CHEQUE','CARD','OTHER'].map(x=><option key={x}>{x}</option>)}</select></label></div>
-     <label>Payment reference<input value={reference} onChange={e=>setReference(e.target.value)} placeholder="UPI / bank transaction ID"/></label>
+     <label>Payment reference<input required minLength={4} value={reference} onChange={e=>setReference(e.target.value)} placeholder="UPI / bank transaction ID or cash receipt number"/></label>
      <label>Received on<input required type="date" value={receivedOn} onChange={e=>setReceivedOn(e.target.value)}/></label>
      <button type="submit" disabled={busy||!buyerId||!amount}>Record receipt</button>
     </form>
