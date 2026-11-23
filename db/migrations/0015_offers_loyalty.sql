@@ -3,6 +3,8 @@ BEGIN;
 -- 0002_marketing.sql created a legacy offer_redemptions table for the retired offer model.
 -- Preserve its history under an explicit legacy name before creating the buyer/supplier-scoped ledger.
 ALTER TABLE offer_redemptions RENAME TO legacy_offer_redemptions;
+ALTER TABLE legacy_offer_redemptions RENAME CONSTRAINT offer_redemptions_pkey TO legacy_offer_redemptions_pkey;
+ALTER TABLE legacy_offer_redemptions RENAME CONSTRAINT offer_redemptions_order_id_key TO legacy_offer_redemptions_order_id_key;
 
 CREATE TABLE IF NOT EXISTS customer_offers (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
