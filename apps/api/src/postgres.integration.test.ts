@@ -199,6 +199,9 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    items:[{variantId,grams}],promotionCode:'CI10',event
   },customerToken);
   expect(created.status).toBe(201);
+  const inboxAfterOptOut=await request('/v1/notifications','GET',undefined,customerToken);
+  const orderNoticeCount=(await inboxAfterOptOut.json() as {items:{category:string;title:string}[]}).items.filter(n=>n.category==='ORDER'&&n.title==='Order confirmed').length;
+  expect(orderNoticeCount).toBe(1);
   const id=(await created.json() as {id:string}).id;
   const cancellationEvent={eventType:'ORDER_CANCELLED',subjectType:'ORDER',subjectId:id,
    location:{source:'UNAVAILABLE',unavailableReason:'CI has no device GPS',consentStatus:'NOT_REQUESTED'},
