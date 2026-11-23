@@ -142,7 +142,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
    setOrgName('');setContactEmail('');setContactPassword('');setKitchenName('');setAddress('');
   },'Customer organisation and first kitchen created.');
  }
- const hasWorkspaces=canCustomer||canAdmin||canSales||canProcure||canCut||canQC||canPack||canDeliver||canMarketing;
+ const hasWorkspaces=canCustomer||canAdmin||canSales||canProcure||canCut||canQC||canPack||canDeliver||canMarketing||canFinance;
  const availableTabs=[...(canCustomer?['Supply']:[]),...(canAdmin?['Overview','Staff','Customers','Catalogue','Slots']:!hasWorkspaces?['Overview']:[]),...(canAdmin||canSales?['Contracts']:[]),...(canSupport?['Support']:[]),...(canFinance?['Finance']:[]),...(canProcure?['Procurement']:[]),...(canCut?['Cutting']:[]),...(canQC?['Quality']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[]),...(canMarketing?['Marketing']:[])] as (typeof tab)[];
  return <div className="fp-secure">
  <header className="fp-secure-header"><button type="button" onClick={onHome} className="fp-secure-brand" aria-label="FreshPrep home">❧ FreshPrep <small>Veggies</small></button><div><span>SECURE BUSINESS PORTAL</span>{session&&<span className="fp-secure-account">{email}</span>}</div></header>
