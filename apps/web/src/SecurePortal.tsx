@@ -6,6 +6,7 @@ import AdminInsights from './AdminInsights';
 import SecureOperations from './SecureOperations';
 import SecureMarketingAdmin from './SecureMarketingAdmin';
 import ContractAdmin from './ContractAdmin';
+import SupportAdmin from './SupportAdmin';
 import {apiRequest,FriendlyApiError} from './api-errors';
 type Session={accessToken:string;tokenType:string;expiresInSeconds:number};
 type Profile={userId:string;organizationId:string;roles:string[]};
@@ -24,7 +25,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  const[session,setSession]=useState<Session|null>(null),[profile,setProfile]=useState<Profile|null>(null);
  const[overview,setOverview]=useState<Overview|null>(null),[staff,setStaff]=useState<Staff[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]);
  const[tasks,setTasks]=useState<Task[]>([]),[boardDate,setBoardDate]=useState(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'})),[boardBusy,setBoardBusy]=useState(false),[boardRefresh,setBoardRefresh]=useState(0);
- const[tab,setTab]=useState<'Overview'|'Supply'|'Staff'|'Customers'|'Catalogue'|'Slots'|'Procurement'|'Cutting'|'Quality'|'Packing'|'Delivery'|'Marketing'|'Contracts'>('Overview');
+ const[tab,setTab]=useState<'Overview'|'Supply'|'Staff'|'Customers'|'Catalogue'|'Slots'|'Procurement'|'Cutting'|'Quality'|'Packing'|'Delivery'|'Marketing'|'Contracts'|'Support'>('Overview');
  const[generationDate,setGenerationDate]=useState(new Date(Date.now()+86_400_000).toISOString().slice(0,10));
  const[generationSummary,setGenerationSummary]=useState<Record<string,number>|null>(null);
  const[staffEmail,setStaffEmail]=useState(''),[staffPassword,setStaffPassword]=useState(''),[staffRole,setStaffRole]=useState('OPERATOR');
@@ -39,6 +40,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  const canPack=profile?.roles.some(r=>['SUPERADMIN','PACKER'].includes(r))??false;
  const canDeliver=profile?.roles.some(r=>['SUPERADMIN','DISPATCH','DRIVER'].includes(r))??false;
  const canMarketing=profile?.roles.some(r=>['SUPERADMIN','ADMIN','MARKETING'].includes(r))??false;
+ const canSupport=profile?.roles.some(r=>['SUPERADMIN','ADMIN','SALES'].includes(r))??false;
  async function login(e:React.FormEvent){
   e.preventDefault();setBusy(true);setError('');
   try{
@@ -139,7 +141,7 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
   },'Customer organisation and first kitchen created.');
  }
  const hasWorkspaces=canCustomer||canAdmin||canSales||canProcure||canCut||canQC||canPack||canDeliver||canMarketing;
- const availableTabs=[...(canCustomer?['Supply']:[]),...(canAdmin?['Overview','Staff','Customers','Catalogue','Slots']:!hasWorkspaces?['Overview']:[]),...(canAdmin||canSales?['Contracts']:[]),...(canProcure?['Procurement']:[]),...(canCut?['Cutting']:[]),...(canQC?['Quality']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[]),...(canMarketing?['Marketing']:[])] as (typeof tab)[];
+ const availableTabs=[...(canCustomer?['Supply']:[]),...(canAdmin?['Overview','Staff','Customers','Catalogue','Slots']:!hasWorkspaces?['Overview']:[]),...(canAdmin||canSales?['Contracts']:[]),...(canSupport?['Support']:[]),...(canProcure?['Procurement']:[]),...(canCut?['Cutting']:[]),...(canQC?['Quality']:[]),...(canPack?['Packing']:[]),...(canDeliver?['Delivery']:[]),...(canMarketing?['Marketing']:[])] as (typeof tab)[];
  return <div className="fp-secure">
  <header className="fp-secure-header"><button type="button" onClick={onHome} className="fp-secure-brand" aria-label="FreshPrep home">❧ FreshPrep <small>Veggies</small></button><div><span>SECURE BUSINESS PORTAL</span>{session&&<span className="fp-secure-account">{email}</span>}</div></header>
  {!session?<div className="fp-login-layout"><div className="fp-login-story"><span>FRESHPREP OPERATIONS</span><h1>One platform.<br/>Every kitchen.<br/>Every role.</h1><p>Sign in to manage staff, customer kitchens and operational workboards.</p><div>Signed JWTs · Database-verified permissions · Organisation-scoped access</div></div>
@@ -151,10 +153,11 @@ export default function SecurePortal({onHome}:{onHome:()=>void}){
  <button type="submit" disabled={busy}>{busy?'Signing in…':'Sign in securely →'}</button>
  <small>Need access or forgot your password? Contact your organisation administrator. Public registration and self-service password recovery are not yet available.</small></form></div>:
  <div className="fp-secure-workspace">
- <div className="fp-secure-intro"><div><span>FRESHPREP  /  TEAM WORKSPACE  /  {profile?.organizationId.slice(0,8)}</span><h1>{tab==='Supply'?'Your kitchen, always prepared':tab==='Overview'?'Business overview':tab==='Procurement'?'Procurement & inventory':tab==='Cutting'?'Production planning':tab==='Quality'?'Quality assurance':tab==='Packing'?'Packing operations':tab==='Delivery'?'Delivery control':tab==='Marketing'?'Marketing & announcements':tab==='Contracts'?'Buyer contracts & price books':tab==='Staff'?'Team management':tab==='Customers'?'Customer network':tab==='Catalogue'?'Product catalogue':'Delivery configuration'}</h1><p>Your authorised workspace · {profile?.roles.join(' · ')}</p></div><div className="fp-secure-intro-actions"><span className="fp-secure-session-note">Protected session · signed-in organisation</span><button type="button" onClick={()=>void logout()}>Sign out</button></div></div>
+ <div className="fp-secure-intro"><div><span>FRESHPREP  /  TEAM WORKSPACE  /  {profile?.organizationId.slice(0,8)}</span><h1>{tab==='Supply'?'Your kitchen, always prepared':tab==='Overview'?'Business overview':tab==='Procurement'?'Procurement & inventory':tab==='Cutting'?'Production planning':tab==='Quality'?'Quality assurance':tab==='Packing'?'Packing operations':tab==='Delivery'?'Delivery control':tab==='Marketing'?'Marketing & announcements':tab==='Contracts'?'Buyer contracts & price books':tab==='Support'?'Complaints, shortages & returns':tab==='Staff'?'Team management':tab==='Customers'?'Customer network':tab==='Catalogue'?'Product catalogue':'Delivery configuration'}</h1><p>Your authorised workspace · {profile?.roles.join(' · ')}</p></div><div className="fp-secure-intro-actions"><span className="fp-secure-session-note">Protected session · signed-in organisation</span><button type="button" onClick={()=>void logout()}>Sign out</button></div></div>
  {error&&<p role="alert" className="fp-error">{error}</p>}{message&&<p role="status" className="fp-notice">{message}</p>}
- <div className="fp-secure-layout"><nav className="fp-secure-tabs" aria-label="Workspace navigation"><p className="fp-secure-nav-caption">WORKSPACES</p>{availableTabs.map(t=><button type="button" key={t} aria-current={tab===t?'page':undefined} className={tab===t?'active':''} onClick={()=>void openTab(t)}><span className="fp-secure-nav-icon" aria-hidden="true">{({Overview:'▦',Supply:'▤',Staff:'♧',Customers:'▣',Catalogue:'◈',Slots:'◷',Procurement:'▧',Cutting:'▥',Quality:'◆',Packing:'▨',Delivery:'↗',Marketing:'✦',Contracts:'◫'} as Record<string,string>)[t]}</span>{t}</button>)}<div className="fp-secure-nav-footer"><strong>FreshPrep operations</strong><span>Roles are verified with every request.</span></div></nav><main className="fp-secure-main" id="workspace-content">
+ <div className="fp-secure-layout"><nav className="fp-secure-tabs" aria-label="Workspace navigation"><p className="fp-secure-nav-caption">WORKSPACES</p>{availableTabs.map(t=><button type="button" key={t} aria-current={tab===t?'page':undefined} className={tab===t?'active':''} onClick={()=>void openTab(t)}><span className="fp-secure-nav-icon" aria-hidden="true">{({Overview:'▦',Supply:'▤',Staff:'♧',Customers:'▣',Catalogue:'◈',Slots:'◷',Procurement:'▧',Cutting:'▥',Quality:'◆',Packing:'▨',Delivery:'↗',Marketing:'✦',Contracts:'◫',Support:'♡'} as Record<string,string>)[t]}</span>{t}</button>)}<div className="fp-secure-nav-footer"><strong>FreshPrep operations</strong><span>Roles are verified with every request.</span></div></nav><main className="fp-secure-main" id="workspace-content">
  {tab==='Contracts'&&session&&<ContractAdmin base={BASE} token={session.accessToken} canManage={canAdmin} onSessionExpired={()=>void logout()}/>}
+ {tab==='Support'&&session&&<SupportAdmin base={BASE} token={session.accessToken} canResolve={canAdmin} onSessionExpired={()=>void logout()}/>}
  {tab==='Marketing'&&session&&<SecureMarketingAdmin base={BASE} token={session.accessToken} onSessionExpired={()=>void logout()}/>}
  {tab==='Supply'&&session&&profile&&<CustomerOrderPortal token={session.accessToken} base={BASE} roles={profile.roles} onLogout={()=>void logout()}/>}
  {(tab==='Catalogue'||tab==='Slots')&&session&&<CatalogAdmin base={BASE} token={session.accessToken} superadmin={profile?.roles.includes('SUPERADMIN')??false} mode={tab}/>}
