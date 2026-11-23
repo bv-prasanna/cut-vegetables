@@ -155,3 +155,24 @@
 .fp-contract-price-form{grid-template-columns:repeat(3,minmax(0,1fr));align-items:end}
 .fp-contract-price-form button{align-self:end}
 @media(max-width:760px){.fp-secure-form-grid,.fp-contract-price-form{grid-template-columns:1fr}.fp-contract-rules article{align-items:flex-start;flex-direction:column}}
+
+.fp-support-admin{display:grid;gap:16px}
+.fp-support-filters{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:#f6faf6;border:1px solid #e6eee6;border-radius:10px}
+.fp-support-filters label{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700}
+.fp-support-filters select{min-width:170px;padding:9px;border:1px solid #dce7dc;border-radius:8px;background:#fff}
+.fp-support-case-list{display:grid;gap:12px}
+.fp-support-case-list>article{padding:18px;border:1px solid #e7eee7;border-radius:12px;background:#fff}
+.fp-support-case-list>article>header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.fp-support-case-list>article>header>div{display:grid;gap:5px}
+.fp-support-case-list small{font-size:11px;color:#748276}
+.fp-support-case-list p{font-size:13px;line-height:1.6;color:#45584a;margin:12px 0 0}
+.fp-support-state{white-space:nowrap;padding:5px 10px;border-radius:20px;background:#edf5ed;color:#315f3c;font-size:10px;font-weight:800}
+.fp-support-state.state-rejected,.fp-support-state.state-closed{background:#f7eeee;color:#8c4848}
+.fp-support-state.state-waiting_customer{background:#fff6e7;color:#8a6429}
+.fp-support-decision{display:grid;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid #edf1ed}
+.fp-support-decision label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#385b41}
+.fp-support-decision textarea{width:100%;padding:10px;border:1px solid #dce7dc;border-radius:8px;font:inherit;resize:vertical}
+.fp-support-decision>div{display:flex;gap:8px;flex-wrap:wrap}
+.fp-support-decision button{padding:9px 13px;border:0;border-radius:8px;background:#17613d;color:white;font-weight:800}
+.fp-support-decision button.secondary{background:#f5eeee;color:#8c4848}
+@media(max-width:640px){.fp-support-case-list>article>header{flex-direction:column}.fp-support-filters{align-items:flex-start;flex-direction:column}}
