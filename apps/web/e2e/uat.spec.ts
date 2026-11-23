@@ -164,7 +164,8 @@ test('notification inbox loads and supports marking a message read',async({page}
  await nav.getByRole('button',{name:'Notifications'}).click();
  await expect(page.locator('#workspace-content').getByRole('heading',{name:'Notifications'})).toBeVisible();
  await expect(page.getByRole('heading',{name:'Order confirmed'})).toBeVisible();
- await expect(page.getByText('1 unread')).toBeVisible();
+ await expect(page.locator('.fp-notifications-head')).toContainText('1');
+ await expect(page.locator('.fp-notifications-head')).toContainText('unread');
  await page.getByRole('button',{name:'Mark as read'}).click();
 });
 test('finance: role-scoped invoices and collections workspace renders safely',async({page},info)=>{
