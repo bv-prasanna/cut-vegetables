@@ -190,7 +190,7 @@ test('customer can validate a coupon before order confirmation',async({page})=>{
  await expect(page.getByRole('heading',{name:'Prepared vegetables'})).toBeVisible();
  await page.getByLabel('Offer code').fill('WELCOME10');
  await page.getByRole('button',{name:'Apply offer'}).click();
- await expect(page.locator('.fp-customer-promotion')).toContainText('Offer WELCOME10 applied');
+ await expect(page.getByText('Offer WELCOME10 applied')).toBeVisible();
 });
 test('customer can request a quote and review its proposal queue',async({page})=>{
  await mockApi(page,['CUSTOMER_BUYER']);
