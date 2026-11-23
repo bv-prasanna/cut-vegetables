@@ -39,3 +39,9 @@
 .fp-finance-error{background:#fff0ef;color:#9a352d}.fp-finance-notice{background:#edf7ef;color:#286343}
 @media(max-width:1050px){.fp-finance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.fp-finance-columns{grid-template-columns:1fr}}
 @media(max-width:620px){.fp-finance-heading{align-items:flex-start;flex-direction:column}.fp-finance-metrics{gap:8px}.fp-finance-metrics article{padding:12px}.fp-finance-form-row{grid-template-columns:1fr}.fp-finance-order{grid-template-columns:minmax(0,1fr) auto}.fp-finance-order button{grid-column:1/-1;justify-self:start}}
+
+
+.fp-finance-refund-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.fp-finance-refund-actions input{min-width:170px;max-width:230px;border:1px solid #dce6df;border-radius:8px;padding:8px;font:inherit;font-size:12px}
+.fp-finance-refund-actions button{border:0;border-radius:8px;padding:8px 10px;background:#176b4b;color:white;font-size:11px;font-weight:750;cursor:pointer}
+.fp-finance-refund-actions button:disabled{opacity:.5;cursor:not-allowed}
