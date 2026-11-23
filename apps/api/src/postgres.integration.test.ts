@@ -169,7 +169,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   });
   const db=await pool.query<{n:string}>('SELECT count(*)::text AS n FROM slot_reservations WHERE order_id=$1',[created.id]);
   expect(Number(db.rows[0].n)).toBe(1);
-  const snapshot=await pool.query<{contract_id:string;subtotal_paise:string;delivery_fee_paise:string;total_paise:string;price_paise_per_kg:string}>(
+  const snapshot=await pool.query<{contract_id:string;subtotal_paise:string;delivery_fee_paise:string;discount_paise:string;total_paise:string;price_paise_per_kg:string}>(
    'SELECT o.contract_id,o.subtotal_paise,o.delivery_fee_paise,o.discount_paise,o.total_paise,oi.price_paise_per_kg FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.id=$1',[created.id]);
   expect(snapshot.rows[0].contract_id).toBe(contractId);
   expect(Number(snapshot.rows[0].price_paise_per_kg)).toBe(basePrice+250);
