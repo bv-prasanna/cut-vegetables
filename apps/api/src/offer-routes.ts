@@ -10,7 +10,7 @@ const offerInput=z.object({
  discountType:z.enum(['FIXED_PAISE','PERCENT_BPS']),discountValue:z.number().int().positive().max(100_000_000),
  maxDiscountPaise:z.number().int().positive().optional(),minimumSubtotalPaise:z.number().int().nonnegative().default(0),
  startsAt:z.string().datetime(),endsAt:z.string().datetime(),maxRedemptions:z.number().int().positive().optional(),
- perBuyerLimit:z.number().int().positive().max(100).default(1)
+ perBuyerLimit:z.number().int().positive().max(100).default(1),stackingAllowed:z.boolean().default(false)
 }).refine(v=>new Date(v.endsAt)>new Date(v.startsAt),{path:['endsAt'],message:'Offer end must be after start'})
  .refine(v=>v.discountType!=='PERCENT_BPS'||v.discountValue<=10000,{path:['discountValue'],message:'Percentage cannot exceed 100%'});
 function failPermission(roles:Role[],permission:string){if(!canAny(roles,permission))throw new BusinessFailure(403,'Permission denied');}
@@ -29,7 +29,7 @@ export function createOfferRoutes(pool:Pool){
   const row=await inTransaction(pool,async tx=>{
    const duplicate=await tx.query('SELECT id FROM customer_offers WHERE producer_organization_id=$1 AND code=$2',[c.get('organizationId'),d.code]);
    if(duplicate.rowCount)throw new BusinessFailure(409,'Offer code already exists');
-   const q=await tx.query('INSERT INTO customer_offers(producer_organization_id,code,name,description,discount_type,discount_value,max_discount_paise,minimum_subtotal_paise,starts_at,ends_at,max_redemptions,per_buyer_limit,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::timestamptz,$10::timestamptz,$11,$12,$13) RETURNING id,code,status',[c.get('organizationId'),d.code,d.name,d.description??null,d.discountType,d.discountValue,d.maxDiscountPaise??null,d.minimumSubtotalPaise,d.startsAt,d.endsAt,d.maxRedemptions??null,d.perBuyerLimit,c.get('userId')]);
+   const q=await tx.query('INSERT INTO customer_offers(producer_organization_id,code,name,description,discount_type,discount_value,max_discount_paise,minimum_subtotal_paise,starts_at,ends_at,max_redemptions,per_buyer_limit,stacking_allowed,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::timestamptz,$10::timestamptz,$11,$12,$13,$14) RETURNING id,code,status',[c.get('organizationId'),d.code,d.name,d.description??null,d.discountType,d.discountValue,d.maxDiscountPaise??null,d.minimumSubtotalPaise,d.startsAt,d.endsAt,d.maxRedemptions??null,d.perBuyerLimit,d.stackingAllowed,c.get('userId')]);
    await recordEvent(tx,c.get('organizationId'),c.get('userId'),systemEvent('CUSTOMER_OFFER_CREATED','OFFER',q.rows[0].id),'CUSTOMER_OFFER_CREATED','OFFER',q.rows[0].id);return q.rows[0];
   });
   return c.json(row,201);
