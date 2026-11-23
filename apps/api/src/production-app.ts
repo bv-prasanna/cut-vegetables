@@ -29,6 +29,7 @@ const orderSchema=z.object({
  deliveryDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
  idempotencyKey:z.string().min(8).max(120),
  items:z.array(z.object({variantId:z.string().uuid(),grams:z.number().int().positive()})).min(1).max(50),
+ promotionCode:z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9_-]+$/).optional(),
  event:geoEventSchema
 });
 const reject=(message:string)=>({error:message});
@@ -170,7 +171,8 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
   if(data.event.eventType!=='ORDER_CREATED')return c.json(reject('Expected ORDER_CREATED audit event'),400);
   const requestFingerprint=JSON.stringify({
    kitchenId:data.kitchenId,slotId:data.slotId,deliveryDate:data.deliveryDate,
-   items:[...data.items].sort((a,b)=>a.variantId.localeCompare(b.variantId))
+   items:[...data.items].sort((a,b)=>a.variantId.localeCompare(b.variantId)),
+   promotionCode:data.promotionCode?.toUpperCase()??null
   });
   const client=await pool.connect();
   try{
@@ -201,14 +203,33 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
    if(prices.size!==ids.length||data.items.some(i=>{const v=prices.get(i.variantId);return !v||i.grams<v.minimum_grams||(i.grams-v.minimum_grams)%v.increment_grams!==0;})){await client.query('ROLLBACK');return c.json(reject('One or more products are not covered by an approved contract price or quantity rule'),422);}
    const subtotal=data.items.reduce((sum,item)=>sum+Math.round(prices.get(item.variantId)!.price_paise_per_kg*item.grams/1000),0);
    if(subtotal<Number(pricing.contract.minimum_order_value_paise)){await client.query('ROLLBACK');return c.json(reject('Order is below the contracted minimum order value'),422);}
-   const deliveryFee=Number(pricing.contract.delivery_fee_paise),total=subtotal+deliveryFee;
-   const pricingSnapshot={contractId:pricing.contract.id,contractVersion:pricing.contract.version,subtotalPaise:subtotal,deliveryFeePaise:deliveryFee,totalPaise:total,currency:'INR'};
-   const inserted=await client.query('INSERT INTO orders(organization_id,kitchen_id,slot_id,delivery_date,idempotency_key,request_fingerprint,producer_organization_id,contract_id,contract_version,subtotal_paise,delivery_fee_paise,total_paise,pricing_snapshot) VALUES($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb) RETURNING id',[c.get('organizationId'),data.kitchenId,data.slotId,data.deliveryDate,data.idempotencyKey,requestFingerprint,kitchen.rows[0].producer_organization_id,pricing.contract.id,pricing.contract.version,subtotal,deliveryFee,total,JSON.stringify(pricingSnapshot)]);
+   const deliveryFee=Number(pricing.contract.delivery_fee_paise);
+   let discount=0,promotionId:string|null=null,promotionSnapshot:Record<string,unknown>|null=null;
+   if(data.promotionCode){
+    const offerQ=await client.query('SELECT id,code,status,discount_type,discount_value,max_discount_paise,minimum_subtotal_paise,starts_at,ends_at,max_redemptions,per_buyer_limit FROM customer_offers WHERE producer_organization_id=$1 AND code=$2 FOR UPDATE',[kitchen.rows[0].producer_organization_id,data.promotionCode.toUpperCase()]);
+    if(!offerQ.rowCount){await client.query('ROLLBACK');return c.json(reject('Offer code is not valid for this supplier'),422);}
+    const offer=offerQ.rows[0],now=clock();
+    if(offer.status!=='ACTIVE'||new Date(offer.starts_at)>now||new Date(offer.ends_at)<=now){await client.query('ROLLBACK');return c.json(reject('This offer is not currently available'),409);}
+    if(subtotal<Number(offer.minimum_subtotal_paise)){await client.query('ROLLBACK');return c.json(reject('Order does not meet the minimum value for this offer'),422);}
+    const usage=await client.query('SELECT count(*)::int AS total,count(*) FILTER(WHERE buyer_organization_id=$2)::int AS buyer_total FROM offer_redemptions WHERE offer_id=$1',[offer.id,c.get('organizationId')]);
+    if(offer.max_redemptions!==null&&usage.rows[0].total>=offer.max_redemptions){await client.query('ROLLBACK');return c.json(reject('This offer has reached its redemption limit'),409);}
+    if(usage.rows[0].buyer_total>=offer.per_buyer_limit){await client.query('ROLLBACK');return c.json(reject('Your organisation has already used this offer the maximum number of times'),409);}
+    discount=offer.discount_type==='FIXED_PAISE'?Number(offer.discount_value):Math.floor(subtotal*Number(offer.discount_value)/10000);
+    if(offer.max_discount_paise!==null)discount=Math.min(discount,Number(offer.max_discount_paise));
+    discount=Math.min(subtotal,discount);
+    if(discount<=0){await client.query('ROLLBACK');return c.json(reject('Offer does not produce a valid discount'),422);}
+    promotionId=offer.id;
+    promotionSnapshot={code:offer.code,discountType:offer.discount_type,discountValue:offer.discount_value,discountPaise:discount};
+   }
+   const total=subtotal-discount+deliveryFee;
+   const pricingSnapshot={contractId:pricing.contract.id,contractVersion:pricing.contract.version,subtotalPaise:subtotal,deliveryFeePaise:deliveryFee,discountPaise:discount,promotion:promotionSnapshot,totalPaise:total,currency:'INR'};
+   const inserted=await client.query('INSERT INTO orders(organization_id,kitchen_id,slot_id,delivery_date,idempotency_key,request_fingerprint,producer_organization_id,contract_id,contract_version,subtotal_paise,delivery_fee_paise,discount_paise,total_paise,pricing_snapshot,promotion_id) VALUES($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15) RETURNING id',[c.get('organizationId'),data.kitchenId,data.slotId,data.deliveryDate,data.idempotencyKey,requestFingerprint,kitchen.rows[0].producer_organization_id,pricing.contract.id,pricing.contract.version,subtotal,deliveryFee,discount,total,JSON.stringify(pricingSnapshot),promotionId]);
    const orderId:string=inserted.rows[0].id;
    for(const item of data.items){const v=prices.get(item.variantId)!;const amount=Math.round(v.price_paise_per_kg*item.grams/1000);
     const itemSnapshot={priceRuleId:v.id,pricePaisePerKg:v.price_paise_per_kg,minimumGrams:v.minimum_grams,incrementGrams:v.increment_grams,serviceDate:data.deliveryDate};
     await client.query('INSERT INTO order_items(order_id,variant_id,grams,price_paise_per_kg,line_total_paise,contract_price_rule_id,pricing_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)',[orderId,item.variantId,item.grams,v.price_paise_per_kg,amount,v.id,JSON.stringify(itemSnapshot)]);
    }
+   if(promotionId)await client.query('INSERT INTO offer_redemptions(offer_id,producer_organization_id,buyer_organization_id,order_id,discount_paise) VALUES($1,$2,$3,$4,$5)',[promotionId,kitchen.rows[0].producer_organization_id,c.get('organizationId'),orderId,discount]);
    await client.query('INSERT INTO slot_reservations(slot_id,delivery_date,order_id) VALUES($1,$2::date,$3)',[data.slotId,data.deliveryDate,orderId]);
    await insertGeoEvent(client,{...data.event,subjectId:orderId},c.get('organizationId'),c.get('userId'));
    await client.query('COMMIT');return c.json({id:orderId,replayed:false},201);
