@@ -256,7 +256,7 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
    }
    await client.query('INSERT INTO slot_reservations(slot_id,delivery_date,order_id) VALUES($1,$2::date,$3)',[data.slotId,data.deliveryDate,orderId]);
    await notifyOrganization(client,c.get('organizationId'),['CUSTOMER_ADMIN','CUSTOMER_BUYER','CUSTOMER_VIEWER'],'ORDER','Order confirmed','Your FreshPrep order has been confirmed and is being prepared.','ORDER',orderId,'ORDER_CREATED:'+orderId,{orderId});
-   await notifyOrganization(client,kitchen.rows[0].producer_organization_id,['ADMIN','PROCUREMENT','SALES'],'ORDER','New customer order','A new customer order is ready for fulfilment.','ORDER',orderId,'NEW_ORDER:'+orderId,{orderId});
+   await notifyOrganization(client,kitchen.rows[0].producer_organization_id,['SUPERADMIN','ADMIN','PROCUREMENT','SALES'],'ORDER','New customer order','A new customer order is ready for fulfilment.','ORDER',orderId,'NEW_ORDER:'+orderId,{orderId});
    await insertGeoEvent(client,{...data.event,subjectId:orderId},c.get('organizationId'),c.get('userId'));
    await client.query('COMMIT');return c.json({id:orderId,replayed:false},201);
   }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
