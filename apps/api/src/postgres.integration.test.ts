@@ -446,6 +446,8 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(financeToken).toBeTruthy();
   const walletBefore=await request('/v1/loyalty/me?kitchenId='+kitchenId,'GET',undefined,customerToken);
   const balanceBefore=(await walletBefore.json() as {balancePoints:number}).balancePoints;
+  const stacked=await request('/v1/orders','POST',{kitchenId,slotId,deliveryDate,idempotencyKey:'integration-loyalty-stacking-blocked-0001',items:[{variantId,grams}],promotionCode:'CI10',loyaltyPoints:1,event},customerToken);
+  expect(stacked.status).toBe(409);
   const redemptionOrder=await request('/v1/orders','POST',{kitchenId,slotId,deliveryDate,idempotencyKey:'integration-loyalty-redeem-order-0001',items:[{variantId,grams}],loyaltyPoints:1,event},customerToken);
   expect(redemptionOrder.status).toBe(201);
   const redemptionOrderId=(await redemptionOrder.json() as {id:string}).id;
