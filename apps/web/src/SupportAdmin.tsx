@@ -1,9 +1,9 @@
 import React,{useCallback,useEffect,useState} from 'react';
 import {apiRequest,FriendlyApiError} from './api-errors';
-type Case={id:string;case_number:number|string;order_id:string;buyer_organization_id?:string;kitchen_id?:string;category:string;description:string;requested_resolution:string|null;state:string;resolution_note:string|null;created_at:string;updated_at:string};
+type Case={id:string;case_number:number|string;order_id:string;buyer_organization_id?:string;kitchen_id?:string;category:string;description:string;requested_resolution:string|null;state:string;resolution_note:string|null;resolution_type?:string|null;created_at:string;updated_at:string};
 type Props={base:string;token:string;canResolve:boolean;onSessionExpired:()=>void};
 export default function SupportAdmin({base,token,canResolve,onSessionExpired}:Props){
- const [cases,setCases]=useState<Case[]>([]),[notes,setNotes]=useState<Record<string,string>>({});
+ const [cases,setCases]=useState<Case[]>([]),[notes,setNotes]=useState<Record<string,string>>({}),[resolutionTypes,setResolutionTypes]=useState<Record<string,string>>({});
  const [filter,setFilter]=useState('OPEN'),[loading,setLoading]=useState(false),[busy,setBusy]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const call=useCallback(async<T,>(path:string,method='GET',payload?:unknown):Promise<T>=>{
   try{return await apiRequest<T>(base,path,{token,method,payload});}
@@ -19,8 +19,10 @@ export default function SupportAdmin({base,token,canResolve,onSessionExpired}:Pr
  async function update(item:Case,state:'IN_REVIEW'|'WAITING_CUSTOMER'|'RESOLVED'|'REJECTED'|'CLOSED'){
   const note=(notes[item.id]||'').trim();
   if(['RESOLVED','REJECTED'].includes(state)&&note.length<5){setError('Add a resolution note of at least 5 characters before closing this case.');return;}
+  const resolutionType=resolutionTypes[item.id];
+  if(state==='RESOLVED'&&!resolutionType){setError('Select a resolution outcome before resolving this case.');return;}
   setBusy(item.id);setError('');setNotice('');
-  try{await call('/v1/support/cases/'+item.id,'PATCH',{state,resolutionNote:note||undefined});
+  try{await call('/v1/support/cases/'+item.id,'PATCH',{state,resolutionNote:note||undefined,resolutionType:state==='RESOLVED'?resolutionType:undefined});
    setNotice('Case #'+item.case_number+' updated to '+state.replaceAll('_',' ').toLowerCase()+'.');await load();
   }catch(e){setError(e instanceof Error?e.message:'Unable to update support case');}
   finally{setBusy('');}
@@ -35,6 +37,7 @@ export default function SupportAdmin({base,token,canResolve,onSessionExpired}:Pr
    <p>{item.description}</p>{item.requested_resolution&&<p><b>Buyer request:</b> {item.requested_resolution}</p>}
    {item.resolution_note&&<p className="fp-support-resolution"><b>Decision:</b> {item.resolution_note}</p>}
    {canResolve&&!['RESOLVED','REJECTED','CLOSED'].includes(item.state)&&<div className="fp-support-decision">
+    <label>Resolution outcome<select value={resolutionTypes[item.id]||''} onChange={e=>setResolutionTypes(old=>({...old,[item.id]:e.target.value}))}><option value="">Select outcome</option><option value="RESUPPLY">Resupply missing items</option><option value="REPLACEMENT">Replacement</option><option value="CREDIT_NOTE">Credit note</option><option value="REFUND">Refund</option><option value="NO_ACTION">No further action</option></select></label>
     <label>Internal / customer-facing decision note<textarea rows={2} value={notes[item.id]||''} onChange={e=>setNotes(old=>({...old,[item.id]:e.target.value}))} maxLength={2000} placeholder="Record the investigation, replacement, credit or reason…"/></label>
     <div>{item.state==='OPEN'&&<button disabled={!!busy} onClick={()=>void update(item,'IN_REVIEW')}>Start review</button>}
      <button disabled={!!busy} onClick={()=>void update(item,'WAITING_CUSTOMER')}>Await customer</button>
