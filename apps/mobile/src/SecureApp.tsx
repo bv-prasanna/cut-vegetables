@@ -130,6 +130,7 @@ function AuthenticatedMobile(){
    let path='';
    if(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')path='/v1/catalog';
    if(screen==='Orders')path='/v1/orders';
+   if(screen==='Finance'||screen==='Invoices')path='/v1/finance/invoices';
    if(screen==='Cutting')path='/v1/ops/production-plan?date='+encodeURIComponent(date);
    if(screen==='Quality')path='/v1/ops/batches';
    if(screen==='Packing')path='/v1/ops/packing-board?date='+encodeURIComponent(date);
