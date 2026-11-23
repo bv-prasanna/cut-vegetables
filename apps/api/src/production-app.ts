@@ -24,6 +24,7 @@ import {createFinanceRoutes} from './finance-routes.js';
 import {createOfferRoutes} from './offer-routes.js';
 import {createLoyaltyRoutes} from './loyalty-routes.js';
 import {createNotificationRoutes} from './notification-routes.js';
+import {createRefundRoutes} from './refund-routes.js';
 import {notifyOrganization} from './notification-service.js';
 type Context={Variables:{userId:string;organizationId:string;roles:Role[]}};
 const loginSchema=z.object({email:z.string().email().max(254),password:z.string().min(1).max(1024),organizationId:z.string().uuid()});
@@ -270,6 +271,7 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
  app.route('/v1',createOfferRoutes(pool));
  app.route('/v1',createLoyaltyRoutes(pool));
  app.route('/v1',createNotificationRoutes(pool));
+ app.route('/v1',createRefundRoutes(pool));
  app.route('/v1',createCatalogAdminRoutes(pool));
  app.route('/v1',createAdminRoutes(pool));
  app.route('/v1',createOperationsRoutes(pool));
