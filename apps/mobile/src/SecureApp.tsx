@@ -14,6 +14,8 @@ import {backend,firstAllowedScreen,screenPermissions,sizeDescription,validateApi
 
 type Fields=Record<string,string>;
 type Recurrence={id:string;state:string;frequency:string;start_date:string;weekdays:number[];slot_id:string};
+type SupportCase={id:string;case_number:number|string;order_id:string;category:string;description:string;requested_resolution:string|null;state:string;resolution_note:string|null;created_at:string};
+type SupportOrder={id:string;delivery_date:string;state:string};
 type Mutation=ActionMutation;
 type Operation={
  title:string;path:string;method:'POST';eventType:string;subjectType:string;
@@ -89,6 +91,9 @@ function AuthenticatedMobile(){
  const [recurrences,setRecurrences]=useState<Recurrence[]>([]),[frequency,setFrequency]=useState<'DAILY'|'WEEKLY'>('WEEKLY');
  const [weekdays,setWeekdays]=useState<number[]>([1,2,3,4,5,6]);
  const [operation,setOperation]=useState<Mutation>('BATCH'),[fields,setFields]=useState<Fields>({});
+ const [supportCases,setSupportCases]=useState<SupportCase[]>([]),[supportOrders,setSupportOrders]=useState<SupportOrder[]>([]);
+ const [supportOrderId,setSupportOrderId]=useState(''),[supportCategory,setSupportCategory]=useState('SHORTAGE');
+ const [supportDescription,setSupportDescription]=useState(''),[supportResolution,setSupportResolution]=useState('');
  const screens=screenPermissions(identity?.roles||[]);
   useEffect(()=>{
    if(!kitchenId||!slots.length)return;
@@ -131,6 +136,11 @@ function AuthenticatedMobile(){
    if(screen==='Procurement')path='/v1/ops/raw-lots';
    if(screen==='Delivery')path='/v1/ops/delivery-board?date='+encodeURIComponent(date);
    if(screen==='Administration')path='/v1/admin/overview';
+   if(screen==='Support'){
+    const [cases,orders]=await Promise.all([call<SupportCase[]>('/v1/support/cases'),call<SupportOrder[]>('/v1/orders')]);
+    setSupportCases(cases);setSupportOrders(orders);
+    setSupportOrderId(old=>orders.some(order=>order.id===old)?old:(orders[0]?.id||''));
+   }
    if(path){
     const result=await call<unknown>(path);
     if(screen==='Catalogue'||screen==='Place Order'||screen==='Recurring')setCatalogue(result as CatalogueVariant[]);
@@ -212,6 +222,26 @@ function AuthenticatedMobile(){
    Alert.alert('Delivery skipped','Skipped '+date+'. An existing confirmed order is not cancelled by skipping.');
    await refresh();
   }catch(e){setError(e instanceof Error?e.message:'Unable to skip this delivery');}
+  finally{setLoading(false);}
+ }
+ async function createSupportCase(){
+  if(!identity?.roles.some(r=>['SUPERADMIN','CUSTOMER_ADMIN','CUSTOMER_BUYER'].includes(r))){
+   Alert.alert('Read-only access','Your account can view support cases but cannot create them.');return;
+  }
+  if(!supportOrderId||supportDescription.trim().length<10){
+   setError('Choose an order and describe the issue in at least 10 characters.');return;
+  }
+  setLoading(true);setError('');
+  try{
+   const op:Operation={title:'Support request',path:'/v1/support/cases',method:'POST',
+    eventType:'SUPPORT_CASE_CREATED',subjectType:'SUPPORT_CASE',fields:[]};
+   const event=await captureEvent(op,'pending');
+   await call('/v1/support/cases','POST',{orderId:supportOrderId,category:supportCategory,
+    description:supportDescription.trim(),requestedResolution:supportResolution.trim()||undefined,event});
+   setSupportDescription('');setSupportResolution('');
+   await refresh();
+   Alert.alert('Support request submitted','Your case has been recorded. You can track its status in this screen.');
+  }catch(e){setError(e instanceof Error?e.message:'Unable to submit support request. Please retry.');}
   finally{setLoading(false);}
  }
  async function submitAction(){
@@ -316,6 +346,34 @@ function AuthenticatedMobile(){
    </>}
   </View>}</>}
   {['Cutting','Packing','Delivery'].includes(screen)&&<Input title="Delivery date YYYY-MM-DD" value={date} onChange={setDate}/>}
+
+  {screen==='Support'&&<>
+   <View style={styles.card}>
+    <Text style={styles.heading}>Raise a support request</Text>
+    <Text style={styles.muted}>Report a shortage, quality concern, wrong item, late delivery, packaging or billing issue. Your case is visible to the supplier support team.</Text>
+    {identity.roles.some(r=>['SUPERADMIN','CUSTOMER_ADMIN','CUSTOMER_BUYER'].includes(r))?<>
+     <Text style={styles.label}>Order</Text>
+     {supportOrders.map(order=><Btn key={order.id} text={order.id.slice(0,8)+' · '+order.delivery_date+' · '+order.state}
+      secondary={supportOrderId!==order.id} onPress={()=>setSupportOrderId(order.id)}/>)}
+     {!supportOrders.length&&<Text style={styles.muted}>No orders are available for a support request yet.</Text>}
+     <Text style={styles.label}>Issue type</Text>
+     <View style={styles.choiceWrap}>{[['QUALITY','Quality'],['SHORTAGE','Short quantity'],['WRONG_ITEM','Wrong item'],['LATE_DELIVERY','Late delivery'],['PACKAGING','Packaging'],['BILLING','Billing'],['RETURN_REQUEST','Return request'],['OTHER','Other']].map(([value,label])=><Btn key={value} text={label} secondary={supportCategory!==value} onPress={()=>setSupportCategory(value)}/>)}</View>
+     <Input title="Describe the issue (minimum 10 characters)" value={supportDescription} onChange={setSupportDescription}/>
+     <Input title="Requested resolution (optional)" value={supportResolution} onChange={setSupportResolution}/>
+     <Btn text={loading?'Submitting…':'Submit support request'} disabled={loading||!supportOrderId||supportDescription.trim().length<10} onPress={()=>void createSupportCase()}/>
+    </>:<Text style={styles.muted}>This account has read-only support access. Contact your buyer administrator to open a case.</Text>}
+   </View>
+   <View style={styles.card}><Text style={styles.heading}>Case history</Text>
+    {supportCases.map(item=><View key={item.id} style={styles.detail}>
+     <View style={{flex:1}}><Text style={styles.item}>Case #{item.case_number} · {item.category.replaceAll('_',' ')}</Text>
+      <Text style={styles.muted}>{item.description}</Text>
+      {item.resolution_note&&<Text style={styles.muted}>Decision: {item.resolution_note}</Text>}
+      <Text style={styles.value}>{item.state.replaceAll('_',' ')} · Order {item.order_id.slice(0,8)}</Text>
+     </View></View>)}
+    {!supportCases.length&&<Text style={styles.muted}>No support cases have been raised for this account.</Text>}
+   </View>
+  </>}
+
   {screen!=='Home'&&screen!=='Catalogue'&&screen!=='Place Order'&&screen!=='Recurring'&&<WorkQueueCards screen={screen} rows={data} loading={loading}/>}
  
   {ops.length>0&&<View style={styles.card}><Text style={styles.heading}>Record verified operation</Text>
