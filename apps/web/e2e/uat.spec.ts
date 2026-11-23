@@ -135,6 +135,16 @@ test('admin: dashboard, staff, customers, catalogue and slots all mount without 
  await expect(page.getByRole('heading',{name:'Buyer quote requests'})).toBeVisible();
  expect(errors).toEqual([]);
 });
+test('admin support workspace loads its queue and protects decision controls',async({page})=>{
+ await mockApi(page,['SUPERADMIN']);
+ await page.goto('/');await signin(page);
+ const nav=page.getByRole('navigation',{name:'Workspace navigation'});
+ await expect(nav.getByRole('button',{name:'Support'})).toBeVisible();
+ await nav.getByRole('button',{name:'Support'}).click();
+ await expect(page.getByRole('heading',{name:'Complaints, shortages & returns'})).toBeVisible();
+ await expect(page.getByText('No cases in this view')).toBeVisible();
+ await expect(page.getByLabel('Case status')).toBeVisible();
+});
 test('customer: role-scoped buying catalogue has no admin overview or staff controls',async({page},info)=>{
  await mockApi(page,['CUSTOMER_BUYER']);
  await page.goto('/');await signin(page);
