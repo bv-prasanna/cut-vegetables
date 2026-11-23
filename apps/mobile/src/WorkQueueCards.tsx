@@ -18,6 +18,23 @@ const Panel=({children}:{children:React.ReactNode})=><View style={styles.card}>{
 const Head=({title,subtitle}:{title:string;subtitle?:string})=><View style={styles.cardHead}><Text style={styles.title}>{title}</Text>{Boolean(subtitle)&&<Text style={styles.subtitle}>{subtitle}</Text>}</View>;
 const Cell=({title,value}:{title:string;value:string})=><View style={styles.cell}><Text style={styles.label}>{title}</Text><Text style={styles.value}>{value}</Text></View>;
 export default function WorkQueueCards({screen,rows,loading}:Props){
+ if(screen==='Finance'||screen==='Invoices'){
+  const money=(value:unknown)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(Number(value||0)/100);
+  return <><Text style={styles.sectionTitle}>{screen==='Finance'?'Customer invoices and collection status':'Your invoices and account documents'}</Text>
+   {rows.map((value,i)=>{const r=rowOf(value),total=Number(r.total_paise||0),paid=Number(r.paid_paise||0);
+    return <Panel key={String(r.id??i)}>
+     <View style={styles.topRow}><View style={styles.grow}><Text style={styles.kicker}>INVOICE #{textOf(r.invoice_number)}</Text>
+      <Text style={styles.title}>{money(total)}</Text><Text style={styles.subtitle}>Order {textOf(r.order_id).slice(0,8)} · {textOf(r.created_at).slice(0,10)}</Text></View>
+      <Status value={r.status}/></View>
+     <View style={styles.line}/><View style={styles.metricRow}>
+      <Cell title="TOTAL" value={money(total)}/><Cell title="PAID" value={money(paid)}/><Cell title="BALANCE" value={money(Math.max(0,total-paid))}/>
+     </View>
+     <Text style={styles.hint}>{textOf(r.tax_policy_status,'PENDING_APPROVAL').replaceAll('_',' ')} · Provisional documents are not GST tax invoices.</Text>
+    </Panel>;
+   })}
+  </>;
+ }
+
  if(loading&&rows.length===0)return <View style={styles.empty}><Text style={styles.emptyTitle}>Loading your assigned work…</Text><Text style={styles.subtitle}>Fetching the latest kitchen and delivery data.</Text></View>;
  if(!loading&&rows.length===0)return <View style={styles.empty}><Text style={styles.emptyGlyph}>✓</Text>
   <Text style={styles.emptyTitle}>Nothing in this work queue</Text>
