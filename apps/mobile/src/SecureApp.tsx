@@ -16,6 +16,7 @@ type Fields=Record<string,string>;
 type Recurrence={id:string;state:string;frequency:string;start_date:string;weekdays:number[];slot_id:string};
 type SupportCase={id:string;case_number:number|string;order_id:string;category:string;description:string;requested_resolution:string|null;state:string;resolution_note:string|null;created_at:string};
 type SupportOrder={id:string;delivery_date:string;state:string};
+type PromotionPreview={code:string;name:string;discountType:'FIXED_PAISE'|'PERCENT_BPS';discountValue:number;maxDiscountPaise:number|null;minimumSubtotalPaise:number};
 type Mutation=ActionMutation;
 type Operation={
  title:string;path:string;method:'POST';eventType:string;subjectType:string;
@@ -94,6 +95,7 @@ function AuthenticatedMobile(){
  const [supportCases,setSupportCases]=useState<SupportCase[]>([]),[supportOrders,setSupportOrders]=useState<SupportOrder[]>([]);
  const [supportOrderId,setSupportOrderId]=useState(''),[supportCategory,setSupportCategory]=useState('SHORTAGE');
  const [supportDescription,setSupportDescription]=useState(''),[supportResolution,setSupportResolution]=useState('');
+ const [promotionCode,setPromotionCode]=useState(''),[promotionPreview,setPromotionPreview]=useState<PromotionPreview|null>(null),[promotionMessage,setPromotionMessage]=useState('');
  const screens=screenPermissions(identity?.roles||[]);
   useEffect(()=>{
    if(!kitchenId||!slots.length)return;
@@ -168,22 +170,32 @@ function AuthenticatedMobile(){
  function increment(v:CatalogueVariant,sign:1|-1){
   setCart(old=>({...old,[v.id]:nextQuantity(old[v.id]||0,v.minimum_grams,v.increment_grams,sign)}));
  }
+ async function applyMobilePromotion(){
+  if(!kitchenId||!promotionCode.trim()){setError('Select a kitchen and enter an offer code.');return;}
+  setLoading(true);setError('');setPromotionMessage('');
+  try{
+   const preview=await call<PromotionPreview>('/v1/promotions/validate?code='+encodeURIComponent(promotionCode.trim())+'&kitchenId='+encodeURIComponent(kitchenId));
+   setPromotionPreview(preview);
+   setPromotionMessage(cartInfo.estimatedPaise<preview.minimumSubtotalPaise?'Offer validated. Add more items to meet the minimum order value.':'Offer validated. Final discount is rechecked when the order is confirmed.');
+  }catch(e){setPromotionPreview(null);setPromotionMessage(e instanceof Error?e.message:'Unable to validate offer code.');}
+  finally{setLoading(false);}
+ }
  async function placeOrder(){
   const invalid=checkoutError(kitchenId,slotId,date,selected,kitchens,slots,catalogue);
   if(invalid){setError(invalid);Alert.alert('Review your order',invalid);return;}
   setLoading(true);setError('');
   try{
-   const fingerprint=fingerprintOrder(kitchenId,slotId,date,selected);
+   const fingerprint=JSON.stringify({order:fingerprintOrder(kitchenId,slotId,date,selected),promotionCode:promotionPreview&&cartInfo.estimatedPaise>=promotionPreview.minimumSubtotalPaise?promotionPreview.code:null});
    if(!orderIntent.current||orderIntent.current.fingerprint!==fingerprint){
     orderIntent.current={fingerprint,key:'mobile-'+Date.now()+'-'+Math.random().toString(36).slice(2)};
    }
    const key=orderIntent.current.key;
    const ev=await captureEvent({title:'Order',path:'',method:'POST',fields:[],eventType:'ORDER_CREATED',subjectType:'ORDER'},key);
    const result=await call<{id:string;replayed?:boolean}>('/v1/orders','POST',{
-    kitchenId,slotId,deliveryDate:date,idempotencyKey:key,items:selected,event:ev
+    kitchenId,slotId,deliveryDate:date,idempotencyKey:key,items:selected,promotionCode:promotionPreview&&cartInfo.estimatedPaise>=promotionPreview.minimumSubtotalPaise?promotionPreview.code:undefined,event:ev
    });
    orderIntent.current=null;
-   setCart({});Alert.alert('Order confirmed',result.replayed?'Existing order confirmed again: '+result.id:'Order reference: '+result.id);
+   setCart({});setPromotionPreview(null);setPromotionCode('');setPromotionMessage('');Alert.alert('Order confirmed',result.replayed?'Existing order confirmed again: '+result.id:'Order reference: '+result.id);
    setScreen('Orders');
   }catch(e){setError(e instanceof Error?e.message:'Unable to submit order. Retry without changing your basket.');}
   finally{setLoading(false);}
@@ -334,6 +346,13 @@ function AuthenticatedMobile(){
     <View style={styles.row}><Btn text="Daily" secondary={frequency!=='DAILY'} onPress={()=>setFrequency('DAILY')}/><Btn text="Selected weekdays" secondary={frequency!=='WEEKLY'} onPress={()=>setFrequency('WEEKLY')}/></View>
     {frequency==='WEEKLY'&&<View style={styles.row}>{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day,index)=><Btn key={day} text={day} secondary={!weekdays.includes(index)} onPress={()=>setWeekdays(old=>old.includes(index)?old.filter(x=>x!==index):[...old,index])}/>)}</View>}
    </>}
+   {screen==='Place Order'&&<View style={styles.card}>
+    <Text style={styles.heading}>Offer code</Text>
+    <Input title="Enter coupon code" value={promotionCode} onChange={v=>{setPromotionCode(v.toUpperCase());setPromotionPreview(null);setPromotionMessage('');}}/>
+    <Btn text="Apply offer" secondary disabled={loading||!promotionCode.trim()} onPress={()=>void applyMobilePromotion()}/>
+    {!!promotionMessage&&<Text style={styles.muted}>{promotionMessage}</Text>}
+    {promotionPreview&&cartInfo.estimatedPaise>=promotionPreview.minimumSubtotalPaise&&<Text style={styles.value}>Validated: {promotionPreview.code} · estimated discount ₹{((promotionPreview.discountType==='FIXED_PAISE'?promotionPreview.discountValue:Math.floor(cartInfo.estimatedPaise*promotionPreview.discountValue/10000))/100).toFixed(2)}</Text>}
+   </View>}
    <Text style={styles.item}>{cartInfo.itemCount} items · {kg(cartInfo.totalGrams)} · estimated ₹{(cartInfo.estimatedPaise/100).toFixed(2)}</Text>
    {identity.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))&&
     <Btn text={screen==='Recurring'?'Create recurring schedule':'Submit confirmed order'} disabled={loading} onPress={()=>screen==='Recurring'?void placeRecurrence():void placeOrder()}/>}
