@@ -439,12 +439,14 @@ suite('real PostgreSQL UAT and negative flows',()=>{
 
  it('creates provisional invoices and enforces receipt allocation and credit-note limits',async()=>{
   expect(financeToken).toBeTruthy();
+  const walletBefore=await request('/v1/loyalty/me?kitchenId='+kitchenId,'GET',undefined,customerToken);
+  const balanceBefore=(await walletBefore.json() as {balancePoints:number}).balancePoints;
   const adjustment=await request('/v1/admin/loyalty/adjustments','POST',{buyerOrganizationId:customerOrg,pointsDelta:2,idempotencyKey:'CI-LOYALTY-ADJUSTMENT-001',note:'UAT approved customer goodwill points.'},financeToken);
   expect(adjustment.status).toBe(201);
-  expect(await adjustment.json()).toMatchObject({balancePoints:5,replayed:false});
+  expect(await adjustment.json()).toMatchObject({balancePoints:balanceBefore+2,replayed:false});
   const adjustmentReplay=await request('/v1/admin/loyalty/adjustments','POST',{buyerOrganizationId:customerOrg,pointsDelta:2,idempotencyKey:'CI-LOYALTY-ADJUSTMENT-001',note:'UAT approved customer goodwill points.'},financeToken);
   expect(adjustmentReplay.status).toBe(201);
-  expect(await adjustmentReplay.json()).toMatchObject({balancePoints:5,replayed:true});
+  expect(await adjustmentReplay.json()).toMatchObject({balancePoints:balanceBefore+2,replayed:true});
   const invalidAdjustment=await request('/v1/admin/loyalty/adjustments','POST',{buyerOrganizationId:customerOrg,pointsDelta:-100,idempotencyKey:'CI-LOYALTY-ADJUSTMENT-002',note:'Negative balance must be blocked.'},financeToken);
   expect(invalidAdjustment.status).toBe(409);
   const invoiceResponse=await request('/v1/finance/invoices/from-order/'+orderId,'POST',{},financeToken);
