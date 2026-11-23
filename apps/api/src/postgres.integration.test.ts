@@ -347,6 +347,53 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(Number(audit.rows[0].count)).toBe(1);
  });
 
+
+ it('opens tenant-scoped shortage/return cases and enforces authorised resolution',async()=>{
+  const opened=await request('/v1/support/cases','POST',{
+   orderId,category:'SHORTAGE',
+   description:'One pack was short by 250 grams compared with the confirmed order.',
+   requestedResolution:'Please arrange a replacement or issue an account credit.',
+   event:{eventType:'SUPPORT_CASE_CREATED',subjectType:'SUPPORT_CASE',subjectId:'pending',
+    location:{source:'UNAVAILABLE',unavailableReason:'CI has no device GPS',consentStatus:'NOT_REQUESTED'},
+    details:{client:'freshprep-ci-support'}}
+  },customerToken);
+  expect(opened.status,await opened.clone().text()).toBe(201);
+  const caseBody=await opened.json() as {id:string;case_number:number;state:string};
+  expect(caseBody.state).toBe('OPEN');
+  const duplicate=await request('/v1/support/cases','POST',{
+   orderId,category:'SHORTAGE',description:'A duplicate active shortage report for the same order.',
+   event:{eventType:'SUPPORT_CASE_CREATED',subjectType:'SUPPORT_CASE',subjectId:'pending',
+    location:{source:'UNAVAILABLE',unavailableReason:'CI has no device GPS',consentStatus:'NOT_REQUESTED'},details:{}}
+  },customerToken);
+  expect(duplicate.status).toBe(409);
+  const customerCases=await request('/v1/support/cases','GET',undefined,customerToken);
+  expect(customerCases.status).toBe(200);
+  expect((await customerCases.json() as {id:string}[]).some(x=>x.id===caseBody.id)).toBe(true);
+  const customerCannotResolve=await request('/v1/support/cases/'+caseBody.id,'PATCH',{
+   state:'RESOLVED',resolutionNote:'Customer cannot resolve supplier case'
+  },customerToken);
+  expect(customerCannotResolve.status).toBe(403);
+  const supplierCases=await request('/v1/support/cases');
+  expect(supplierCases.status).toBe(200);
+  expect((await supplierCases.json() as {id:string}[]).some(x=>x.id===caseBody.id)).toBe(true);
+  const invalidResolve=await request('/v1/support/cases/'+caseBody.id,'PATCH',{state:'RESOLVED'});
+  expect(invalidResolve.status).toBe(422);
+  const resolved=await request('/v1/support/cases/'+caseBody.id,'PATCH',{
+   state:'RESOLVED',resolutionNote:'Replacement approved and delivery credit recorded for the buyer.'
+  });
+  expect(resolved.status).toBe(200);
+  expect(await resolved.json()).toMatchObject({id:caseBody.id,state:'RESOLVED'});
+  const closedAgain=await request('/v1/support/cases/'+caseBody.id,'PATCH',{
+   state:'CLOSED',resolutionNote:'Attempt to modify a resolved case'
+  });
+  expect(closedAgain.status).toBe(409);
+  const persisted=await pool.query<{state:string;resolved_by:string|null;resolved_at:Date|null}>(
+   'SELECT state,resolved_by,resolved_at FROM support_cases WHERE id=$1',[caseBody.id]);
+  expect(persisted.rows[0].state).toBe('RESOLVED');
+  expect(persisted.rows[0].resolved_by).toBeTruthy();
+  expect(persisted.rows[0].resolved_at).toBeTruthy();
+ });
+
  it('exposes permission-scoped action selectors and keeps driver data assigned-only',async()=>{
   const adminOptions=await request('/v1/ops/action-options');
   expect(adminOptions.status).toBe(200);
