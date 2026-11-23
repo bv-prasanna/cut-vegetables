@@ -16,7 +16,7 @@ type Created={organizationId:string;kitchenId:string};
 suite('real PostgreSQL UAT and negative flows',()=>{
  let pool:Pool;
  let app:ReturnType<typeof createProductionApp>;
- let adminToken='',financeToken='',customerToken='',customerOrg='',kitchenId='',slotId='',variantId='',grams=500,deliveryDate='',producerOrg='',orderId='',contractId='',basePrice=0,minimumGrams=0,incrementGrams=0,quoteVariantId='',quoteGrams=0,quoteBasePrice=0,quoteMinimum=0,quoteIncrement=0,quoteId='';
+ let adminToken='',financeToken='',customerToken='',customerOrg='',kitchenId='',slotId='',variantId='',grams=500,deliveryDate='',producerOrg='',orderId='',contractId='',basePrice=0,minimumGrams=0,incrementGrams=0,quoteVariantId='',quoteGrams=0,quoteBasePrice=0,quoteMinimum=0,quoteIncrement=0,quoteId='',supportCaseId='';
  const event={eventType:'ORDER_CREATED',subjectType:'ORDER',subjectId:'pending',
   location:{source:'UNAVAILABLE',unavailableReason:'CI cannot read device GPS',consentStatus:'NOT_REQUESTED'},
   details:{client:'ci-integration'}};
@@ -426,6 +426,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   },customerToken);
   expect(opened.status,await opened.clone().text()).toBe(201);
   const caseBody=await opened.json() as {id:string;case_number:number;state:string};
+  supportCaseId=caseBody.id;
   expect(caseBody.state).toBe('OPEN');
   const customerSupportInbox=await request('/v1/notifications','GET',undefined,customerToken);
   expect((await customerSupportInbox.json() as {items:{category:string;title:string}[]}).items.some(n=>n.category==='SUPPORT'&&n.title==='Support request received')).toBe(true);
@@ -450,7 +451,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   const invalidResolve=await request('/v1/support/cases/'+caseBody.id,'PATCH',{state:'RESOLVED'});
   expect(invalidResolve.status).toBe(422);
   const resolved=await request('/v1/support/cases/'+caseBody.id,'PATCH',{
-   state:'RESOLVED',resolutionNote:'Replacement approved and delivery credit recorded for the buyer.'
+   state:'RESOLVED',resolutionNote:'Refund approved for the documented shortage and invoice.',resolutionType:'REFUND'
   });
   expect(resolved.status).toBe(200);
   const resolvedInbox=await request('/v1/notifications','GET',undefined,customerToken);
@@ -530,6 +531,24 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(credit.status).toBe(201);
   const creditId=(await credit.json() as {id:string}).id;
   expect((await request('/v1/finance/credit-notes/'+creditId+'/approve','PATCH',{},financeToken)).status).toBe(200);
+  const candidates=await request('/v1/finance/refunds/candidates','GET',undefined,financeToken);
+  expect(candidates.status).toBe(200);
+  expect((await candidates.json() as {support_case_id:string;available_paise:number}[]).some(x=>x.support_case_id===supportCaseId&&Number(x.available_paise)===900)).toBe(true);
+  const overRefund=await request('/v1/finance/refunds','POST',{invoiceId:invoice.id,supportCaseId,amountPaise:901,method:'MANUAL',reason:'Refund above paid less credit balance.',idempotencyKey:'CI-REFUND-OVER-001'},financeToken);
+  expect(overRefund.status).toBe(422);
+  const refund=await request('/v1/finance/refunds','POST',{invoiceId:invoice.id,supportCaseId,amountPaise:500,method:'MANUAL',reason:'Refund approved for the documented shortage.',idempotencyKey:'CI-REFUND-001'},financeToken);
+  expect(refund.status).toBe(201);
+  const refundId=(await refund.json() as {id:string;status:string}).id;
+  expect((await request('/v1/finance/refunds','POST',{invoiceId:invoice.id,supportCaseId,amountPaise:500,method:'MANUAL',reason:'Refund approved for the documented shortage.',idempotencyKey:'CI-REFUND-001'},financeToken)).status).toBe(200);
+  expect((await request('/v1/finance/refunds/'+refundId,'PATCH',{status:'REFUNDED',externalReference:'BANK-REFUND-001'},financeToken)).status).toBe(409);
+  expect((await request('/v1/finance/refunds/'+refundId,'PATCH',{status:'APPROVED'},financeToken)).status).toBe(200);
+  expect((await request('/v1/finance/refunds/'+refundId,'PATCH',{status:'PROCESSING'},financeToken)).status).toBe(200);
+  expect((await request('/v1/finance/refunds/'+refundId,'PATCH',{status:'REFUNDED'},financeToken)).status).toBe(422);
+  expect((await request('/v1/finance/refunds/'+refundId,'PATCH',{status:'REFUNDED',externalReference:'BANK-REFUND-001'},financeToken)).status).toBe(200);
+  const customerRefunds=await request('/v1/finance/refunds/me','GET',undefined,customerToken);
+  expect((await customerRefunds.json() as {id:string;status:string}[]).some(x=>x.id===refundId&&x.status==='REFUNDED')).toBe(true);
+  const refundInbox=await request('/v1/notifications','GET',undefined,customerToken);
+  expect((await refundInbox.json() as {items:{category:string;title:string}[]}).items.some(x=>x.category==='FINANCE'&&x.title==='Refund status updated')).toBe(true);
   const issued=await request('/v1/finance/invoices/from-order/'+orderId,'POST',{},financeToken);
   expect(issued.status).toBe(200);
   const summary=await request('/v1/finance/summary','GET',undefined,financeToken);
