@@ -172,6 +172,7 @@ function AuthenticatedMobile(){
  const selected=Object.entries(cart).filter(([,g])=>g>0).map(([variantId,grams])=>({variantId,grams}));
  const filteredCuts=useMemo(()=>searchCuts(catalogue,catalogSearch),[catalogue,catalogSearch]);
  const cartInfo=useMemo(()=>basketTotals(cart,catalogue),[cart,catalogue]);
+ const promotionDiscountPaise=promotionPreview&&cartInfo.estimatedPaise>=promotionPreview.minimumSubtotalPaise?Math.min(promotionPreview.maxDiscountPaise??Number.MAX_SAFE_INTEGER,promotionPreview.discountType==='FIXED_PAISE'?promotionPreview.discountValue:Math.floor(cartInfo.estimatedPaise*promotionPreview.discountValue/10000),cartInfo.estimatedPaise):0;
  function increment(v:CatalogueVariant,sign:1|-1){
   setCart(old=>({...old,[v.id]:nextQuantity(old[v.id]||0,v.minimum_grams,v.increment_grams,sign)}));
  }
@@ -356,9 +357,9 @@ function AuthenticatedMobile(){
     <Input title="Enter coupon code" value={promotionCode} onChange={v=>{setPromotionCode(v.toUpperCase());setPromotionPreview(null);setPromotionMessage('');}}/>
     <Btn text="Apply offer" secondary disabled={loading||!promotionCode.trim()} onPress={()=>void applyMobilePromotion()}/>
     {!!promotionMessage&&<Text style={styles.muted}>{promotionMessage}</Text>}
-    {promotionPreview&&cartInfo.estimatedPaise>=promotionPreview.minimumSubtotalPaise&&<Text style={styles.value}>Validated: {promotionPreview.code} · estimated discount ₹{((promotionPreview.discountType==='FIXED_PAISE'?promotionPreview.discountValue:Math.floor(cartInfo.estimatedPaise*promotionPreview.discountValue/10000))/100).toFixed(2)}</Text>}
+    {promotionPreview&&promotionDiscountPaise>0&&<Text style={styles.value}>Validated: {promotionPreview.code} · estimated discount ₹{(promotionDiscountPaise/100).toFixed(2)}</Text>}
    </View>}
-   <Text style={styles.item}>{cartInfo.itemCount} items · {kg(cartInfo.totalGrams)} · estimated ₹{(cartInfo.estimatedPaise/100).toFixed(2)}</Text>
+   <Text style={styles.item}>{cartInfo.itemCount} items · {kg(cartInfo.totalGrams)} · estimated ₹{((cartInfo.estimatedPaise-promotionDiscountPaise)/100).toFixed(2)}{promotionDiscountPaise>0?' · offer −₹'+(promotionDiscountPaise/100).toFixed(2):''}</Text>
    {identity.roles.some(r=>['SUPERADMIN','CUSTOMER_BUYER','CUSTOMER_ADMIN'].includes(r))&&
     <Btn text={screen==='Recurring'?'Create recurring schedule':'Submit confirmed order'} disabled={loading} onPress={()=>screen==='Recurring'?void placeRecurrence():void placeOrder()}/>}
    {screen==='Recurring'&&<><Text style={styles.heading}>Saved schedules</Text>
