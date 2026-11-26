@@ -342,6 +342,10 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    passed:true,findings:'Too early',event:ev('QC_CHECK_RECORDED','QC_CHECK')
   },actor('QC'));
   expect(failEarlyQc.status).toBe(409);
+  const unbalancedYield=await request('/v1/ops/batches/'+batchId+'/complete','POST',{
+   outputGrams:grams-10,wasteGrams:0,event:ev('PRODUCTION_BATCH_COMPLETED','BATCH')
+  },actor('OPERATOR'));
+  expect(unbalancedYield.status).toBe(422);
   const complete=await request('/v1/ops/batches/'+batchId+'/complete','POST',{
    outputGrams:grams,wasteGrams:0,event:ev('PRODUCTION_BATCH_COMPLETED','BATCH')
   },actor('OPERATOR'));
