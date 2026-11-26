@@ -65,7 +65,7 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
  const [batchId,setBatchId]=useState(''),[outputGrams,setOutputGrams]=useState(''),[wasteGrams,setWasteGrams]=useState('0');
  const [qcPassed,setQcPassed]=useState('true'),[findings,setFindings]=useState('Visual inspection completed'),[temperatureC,setTemperatureC]=useState('');
  const [netGrams,setNetGrams]=useState(''),[labelCode,setLabelCode]=useState('FP-'+Date.now().toString(36).toUpperCase()),[useBy,setUseBy]=useState(localInput(new Date(Date.now()+3*86400000)));
- const [driverId,setDriverId]=useState(''),[slotId,setSlotId]=useState(''),[runId,setRunId]=useState(''),[stopNumber,setStopNumber]=useState('1'),[podStopId,setPodStopId]=useState(''),[receivedBy,setReceivedBy]=useState(''),[podNotes,setPodNotes]=useState('');
+ const [driverId,setDriverId]=useState(''),[slotId,setSlotId]=useState(''),[runId,setRunId]=useState(''),[stopNumber,setStopNumber]=useState('1'),[arrivalStopId,setArrivalStopId]=useState(''),[podStopId,setPodStopId]=useState(''),[receivedBy,setReceivedBy]=useState(''),[podNotes,setPodNotes]=useState('');
  const load=useCallback(async()=>{
   setLoading(true);setError('');
   try{
@@ -192,7 +192,14 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
     <Choice label="Packed order" value={orderId} onChange={setOrderId} options={assignableOrders.filter(o=>!selectedRun||(o.slot_id===selectedRun.slot_id&&o.delivery_date===selectedRun.delivery_date)).map(o=>({value:o.id,label:o.customer+' · '+o.kitchen+' · '+o.delivery_date+' · '+o.id.slice(0,8)}))}/>
     <Field label="Stop number" type="number" value={stopNumber} onChange={setStopNumber}/>
     <button className="fp-ops-submit" disabled={busy||!runId||!orderId}>Assign delivery stop</button></form>)}
-   {tab==='Delivery'&&roleCan(roles,'delivery:pod')&&eventAction('Confirm proof of delivery','Only the driver assigned to the selected open stop can complete handover.',<form className="fp-ops-form" onSubmit={submit(async()=>{
+   {tab==='Delivery'&&roleCan(roles,'delivery:pod')&&eventAction('Mark arrival at customer','Only the assigned driver can mark a pending stop as arrived. This records the arrival time and an audit event before proof of delivery.',<form className="fp-ops-form" onSubmit={submit(async()=>{
+     await perform('/v1/ops/stops/'+encodeURIComponent(arrivalStopId)+'/arrive',{notes:podNotes||undefined},'DELIVERY_STOP_ARRIVED','DELIVERY_STOP','Arrival recorded for the assigned delivery stop.');
+     setArrivalStopId('');setPodNotes('');
+    })}>
+     <Choice label="Pending assigned stop" value={arrivalStopId} onChange={setArrivalStopId} options={options.stops.filter(s=>s.status==='PENDING').map(s=>({value:s.id,label:s.delivery_date+' · '+s.slot_label+' · '+s.customer+' / '+s.kitchen+' · stop '+s.stop_number}))} full/>
+     <Field label="Arrival note" value={podNotes} onChange={setPodNotes} required={false} full/>
+     <button className="fp-ops-submit" disabled={busy||!arrivalStopId}>Mark arrived</button></form>)}
+ {tab==='Delivery'&&roleCan(roles,'delivery:pod')&&eventAction('Confirm proof of delivery','Only the driver assigned to the selected open stop can complete handover.',<form className="fp-ops-form" onSubmit={submit(async()=>{
     await perform('/v1/ops/stops/'+encodeURIComponent(podStopId)+'/complete',{receivedBy,notes:podNotes||undefined},'DELIVERY_POD_CAPTURED','DELIVERY_STOP','Delivery handover recorded with an auditable proof record.');
     setReceivedBy('');setPodNotes('');setPodStopId('');
    })}>
