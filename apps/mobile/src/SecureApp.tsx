@@ -305,7 +305,7 @@ function AuthenticatedMobile(){
   if(screen==='Cutting')return identity?.roles.includes('PRODUCTION_SUPERVISOR')||identity?.roles.includes('SUPERADMIN')?['BATCH','COMPLETE','REWORK']:['BATCH','COMPLETE'];
   if(screen==='Quality')return ['QC'];
   if(screen==='Packing')return ['PACK'];
-  if(screen==='Delivery')return identity?.roles.includes('SUPERADMIN')?['RUN','STOP','ARRIVE','POD']:identity?.roles.includes('DRIVER')?['ARRIVE','POD']:identity?.roles.includes('DISPATCH')?['RUN','STOP']:[];
+  if(screen==='Delivery')return identity?.roles.includes('SUPERADMIN')?['RUN','STOP','ARRIVE','FAIL','RETRY','POD']:identity?.roles.includes('DRIVER')?['ARRIVE','FAIL','POD']:identity?.roles.includes('DISPATCH')?['RUN','STOP','RETRY']:[];
   return [];
  }
  const ops=actionsForScreen();
