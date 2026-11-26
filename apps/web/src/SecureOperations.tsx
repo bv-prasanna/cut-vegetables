@@ -61,6 +61,7 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
  const [purchaseId,setPurchaseId]=useState(''),[vegetableId,setVegetableId]=useState('');
  const [receivedGrams,setReceivedGrams]=useState(''),[usableGrams,setUsableGrams]=useState(''),[rejectedGrams,setRejectedGrams]=useState('0'),[supplierLot,setSupplierLot]=useState('');
  const [orderId,setOrderId]=useState(''),[variantId,setVariantId]=useState(''),[rawLotId,setRawLotId]=useState(''),[inputGrams,setInputGrams]=useState('');
+ const [reworkBatchId,setReworkBatchId]=useState(''),[reworkNote,setReworkNote]=useState('');
  const [batchId,setBatchId]=useState(''),[outputGrams,setOutputGrams]=useState(''),[wasteGrams,setWasteGrams]=useState('0');
  const [qcPassed,setQcPassed]=useState('true'),[findings,setFindings]=useState('Visual inspection completed'),[temperatureC,setTemperatureC]=useState('');
  const [netGrams,setNetGrams]=useState(''),[labelCode,setLabelCode]=useState('FP-'+Date.now().toString(36).toUpperCase()),[useBy,setUseBy]=useState(localInput(new Date(Date.now()+3*86400000)));
@@ -138,7 +139,15 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
     <Choice label="Matching raw lot" value={rawLotId} onChange={setRawLotId} options={matchingLots.map(l=>({value:l.id,label:l.vegetable+' · '+(l.supplier_lot||l.id.slice(0,8))+' · '+(Number(l.usable_grams)/1000).toFixed(2)+' kg'}))}/>
     <Field label="Input weight (grams)" type="number" value={inputGrams} onChange={setInputGrams}/>
     <button className="fp-ops-submit" disabled={busy||!orderId||!variantId||!rawLotId}>Start batch</button></form>)}
-   {tab==='Cutting'&&roleCan(roles,'production:write')&&eventAction('Complete production batch','Record actual finished output and trim waste. Output plus waste must reconcile with input.',<form className="fp-ops-form" onSubmit={submit(async()=>{
+   {tab==='Cutting'&&roleCan(roles,'production:write')&&{tab==='Cutting'&&roleCan(roles,'production:rework')&&eventAction('Return QC-failed batch for rework','A production supervisor can reopen a failed batch after recording the corrective action. The original QC result remains in the audit history.',<form className="fp-ops-form" onSubmit={submit(async()=>{
+     if(reworkNote.trim().length<5){setError('Describe the corrective action before returning this batch to production.');return;}
+     await perform('/v1/ops/batches/'+encodeURIComponent(reworkBatchId)+'/rework',{note:reworkNote.trim()},'PRODUCTION_BATCH_REWORK_REQUESTED','BATCH','Batch returned to production for controlled rework.');
+     setReworkNote('');setReworkBatchId('');
+    })}>
+     <Choice label="QC-failed batch" value={reworkBatchId} onChange={setReworkBatchId} options={options.batches.filter(b=>b.state==='QC_FAILED').map(b=>({value:b.id,label:b.vegetable+' · '+b.preparation+' · '+b.size+' · '+b.id.slice(0,8)}))} full/>
+     <Field label="Corrective action / rework note" value={reworkNote} onChange={setReworkNote} full/>
+     <button className="fp-ops-submit" disabled={busy||!reworkBatchId||reworkNote.trim().length<5}>Return batch to production</button></form>)}
+ eventAction('Complete production batch','Record actual finished output and trim waste. Output plus waste must reconcile with input.',<form className="fp-ops-form" onSubmit={submit(async()=>{
     const batch=processingBatches.find(b=>b.id===batchId),output=Number(outputGrams),waste=Number(wasteGrams);
     if(!batch||!Number.isSafeInteger(output)||!Number.isSafeInteger(waste)||output<0||waste<0||output+waste!==Number(batch.input_grams)){setError('Finished output plus waste must exactly match the selected batch input.');return;}
     await perform('/v1/ops/batches/'+encodeURIComponent(batchId)+'/complete',{outputGrams:output,wasteGrams:waste},'PRODUCTION_BATCH_COMPLETED','BATCH','Batch output recorded and sent to QC.');
