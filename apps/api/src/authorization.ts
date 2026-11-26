@@ -8,7 +8,7 @@ export const permissions = {
  PROCUREMENT:['procurement:write','procurement:read','inventory:read','orders:read'],
  STORE:['inventory:read','inventory:write','procurement:read','production:read'],
  OPERATOR:['orders:read','production:read','production:write'],
- PRODUCTION_SUPERVISOR:['orders:read','production:read','production:write','production:approve','inventory:read'],
+ PRODUCTION_SUPERVISOR:['orders:read','production:read','production:write','production:approve','production:rework','inventory:read'],
  QC:['orders:read','qc:read','qc:write','qc:approve','production:read'],
  PACKER:['orders:read','packing:read','packing:write','qc:read'],
  DISPATCH:['orders:read','delivery:read','delivery:assign','delivery:write'],
