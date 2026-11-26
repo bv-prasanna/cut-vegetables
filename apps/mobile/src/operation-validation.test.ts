@@ -35,6 +35,12 @@ describe('staff physical work forms',()=>{
   expect(validateOperationInput('ARRIVE',{})).toContain('id');
   valid('ARRIVE',{id,notes:'Reached customer gate'});
  });
+ it('validates delivery failure reasons and dispatcher retry notes',()=>{
+  expect(validateOperationInput('FAIL',{id,reasonCode:'UNKNOWN',notes:'Customer not present'})).toContain('supported delivery failure reason');
+  valid('FAIL',{id,reasonCode:'CUSTOMER_UNAVAILABLE',notes:'Customer not present at the delivery address'});
+  expect(validateOperationInput('RETRY',{id,notes:'no'})).toContain('redelivery note');
+  valid('RETRY',{id,notes:'Customer confirmed availability for a new attempt'});
+ });
  it('rejects invalid delivery dates, route stops and missing receiver names',()=>{
   expect(validateOperationInput('RUN',{slotId:id,driverId:id,deliveryDate:'2026-02-30'})).toContain('valid delivery date');
   expect(validateOperationInput('STOP',{id,orderId:id,stopNumber:'0'})).toContain('between 1 and 1000');
