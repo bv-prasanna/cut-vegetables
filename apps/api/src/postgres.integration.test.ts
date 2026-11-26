@@ -397,6 +397,13 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   },actor('DISPATCH'));
   expect(stop.status).toBe(201);
   const stopId=(await stop.json() as {id:string}).id;
+  const dispatcherCannotMarkArrival=await request('/v1/ops/stops/'+stopId+'/arrive','POST',{event:ev('DELIVERY_STOP_ARRIVED','DELIVERY_STOP')},actor('DISPATCH'));
+  expect(dispatcherCannotMarkArrival.status).toBe(403);
+  const arrival=await request('/v1/ops/stops/'+stopId+'/arrive','POST',{notes:'Reached customer gate',event:ev('DELIVERY_STOP_ARRIVED','DELIVERY_STOP')},actor('DRIVER'));
+  expect(arrival.status).toBe(200);
+  expect(await arrival.json()).toMatchObject({id:stopId,status:'ARRIVED'});
+  const duplicateArrival=await request('/v1/ops/stops/'+stopId+'/arrive','POST',{event:ev('DELIVERY_STOP_ARRIVED','DELIVERY_STOP')},actor('DRIVER'));
+  expect(duplicateArrival.status).toBe(409);
   const deliveryEvent=ev('DELIVERY_POD_CAPTURED','DELIVERY_STOP');
   const wrongDriver=await request('/v1/ops/stops/'+stopId+'/complete','POST',{
    receivedBy:'UAT Customer',notes:'Handover confirmed',event:deliveryEvent
