@@ -419,6 +419,12 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(replay.status).toBe(409);
   const state=await pool.query<{state:string}>('SELECT state FROM orders WHERE id=$1',[orderId]);
   expect(state.rows[0].state).toBe('DELIVERED');
+  const traced=await request('/v1/ops/raw-lots/'+rawId+'/traceability','GET',undefined,actor('PROCUREMENT'));
+  expect(traced.status).toBe(200);
+  expect(await traced.json()).toEqual(expect.arrayContaining([expect.objectContaining({
+   raw_lot_id:rawId,batch_id:batchId,order_id:orderId,label_code:'CI-PACK-A-001',delivery_status:'DELIVERED',received_by:'UAT Customer'
+  })]));
+  expect((await request('/v1/ops/raw-lots/'+rawId+'/traceability','GET',undefined,customerToken)).status).toBe(403);
   const deliveryInbox=await request('/v1/notifications','GET',undefined,customerToken);
   const deliveryNotices=(await deliveryInbox.json() as {items:{category:string;title:string}[]}).items;
   expect(deliveryNotices.some(n=>n.category==='DELIVERY'&&n.title==='Order delivered')).toBe(true);
