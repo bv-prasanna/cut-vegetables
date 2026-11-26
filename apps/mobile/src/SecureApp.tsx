@@ -287,9 +287,10 @@ function AuthenticatedMobile(){
    const {id,...body}=fields;
    const payload:Record<string,unknown>={};
    for(const input of op.fields){
-    if(input.key==='id'||!fields[input.key]?.trim())continue;
+    if(input.key==='id'||input.key==='outcome'||!fields[input.key]?.trim())continue;
     payload[input.key]=input.type==='number'?Number(fields[input.key]):input.key==='passed'?fields[input.key].toLowerCase()==='true':fields[input.key].trim();
    }
+   if(action==='FAIL')payload.outcome='FAILED';
    const ev=await captureEvent(op,id||'pending');
    const path=op.path.replace('{id}',encodeURIComponent(id||''));
    await call(path,'POST',{...payload,event:ev});
