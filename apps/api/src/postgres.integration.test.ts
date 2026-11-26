@@ -404,6 +404,36 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   expect(await arrival.json()).toMatchObject({id:stopId,status:'ARRIVED'});
   const duplicateArrival=await request('/v1/ops/stops/'+stopId+'/arrive','POST',{event:ev('DELIVERY_STOP_ARRIVED','DELIVERY_STOP')},actor('DRIVER'));
   expect(duplicateArrival.status).toBe(409);
+  const invalidPartial=await request('/v1/ops/stops/'+stopId+'/exception','POST',{
+   outcome:'PARTIAL',reasonCode:'ITEM_SHORTAGE',notes:'Incorrect full quantity supplied',
+   deliveredGrams:grams,event:ev('DELIVERY_ATTEMPT_PARTIAL','DELIVERY_STOP')
+  },actor('DRIVER'));
+  expect(invalidPartial.status).toBe(422);
+  const failedAttempt=await request('/v1/ops/stops/'+stopId+'/exception','POST',{
+   outcome:'FAILED',reasonCode:'CUSTOMER_UNAVAILABLE',notes:'Customer contact was unavailable at the delivery address.',
+   event:ev('DELIVERY_ATTEMPT_FAILED','DELIVERY_STOP')
+  },actor('DRIVER'));
+  expect(failedAttempt.status).toBe(201);
+  expect(await failedAttempt.json()).toMatchObject({stopId,attemptNumber:1,outcome:'FAILED',orderState:'EXCEPTION'});
+  const wrongRetry=await request('/v1/ops/stops/'+stopId+'/retry','POST',{
+   notes:'Retry requested by unauthorised driver',event:ev('DELIVERY_RETRY_SCHEDULED','DELIVERY_STOP')
+  },actor('DRIVER'));
+  expect(wrongRetry.status).toBe(403);
+  const retry=await request('/v1/ops/stops/'+stopId+'/retry','POST',{
+   notes:'Customer confirmed availability for another attempt.',
+   event:ev('DELIVERY_RETRY_SCHEDULED','DELIVERY_STOP')
+  },actor('DISPATCH'));
+  expect(retry.status).toBe(200);
+  expect(await retry.json()).toMatchObject({stopId,status:'PENDING',orderState:'DISPATCHED'});
+  const attemptHistory=await request('/v1/delivery/stops/'+stopId+'/attempts','GET',undefined,actor('DISPATCH'));
+  expect(attemptHistory.status).toBe(200);
+  expect(await attemptHistory.json()).toEqual(expect.arrayContaining([expect.objectContaining({
+   attempt_number:1,outcome:'FAILED',reason_code:'CUSTOMER_UNAVAILABLE'
+  })]));
+  const arrivalAfterRetry=await request('/v1/ops/stops/'+stopId+'/arrive','POST',{
+   notes:'Returned after customer confirmed',event:ev('DELIVERY_STOP_ARRIVED','DELIVERY_STOP')
+  },actor('DRIVER'));
+  expect(arrivalAfterRetry.status).toBe(200);
   const deliveryEvent=ev('DELIVERY_POD_CAPTURED','DELIVERY_STOP');
   const wrongDriver=await request('/v1/ops/stops/'+stopId+'/complete','POST',{
    receivedBy:'UAT Customer',notes:'Handover confirmed',event:deliveryEvent
