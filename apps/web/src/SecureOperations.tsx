@@ -62,6 +62,7 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
  const [receivedGrams,setReceivedGrams]=useState(''),[usableGrams,setUsableGrams]=useState(''),[rejectedGrams,setRejectedGrams]=useState('0'),[supplierLot,setSupplierLot]=useState('');
  const [orderId,setOrderId]=useState(''),[variantId,setVariantId]=useState(''),[rawLotId,setRawLotId]=useState(''),[inputGrams,setInputGrams]=useState('');
  const [reworkBatchId,setReworkBatchId]=useState(''),[reworkNote,setReworkNote]=useState('');
+ const [traceLotId,setTraceLotId]=useState(''),[traceRows,setTraceRows]=useState<Record<string,unknown>[]>([]),[traceBusy,setTraceBusy]=useState(false),[traceError,setTraceError]=useState('');
  const [batchId,setBatchId]=useState(''),[outputGrams,setOutputGrams]=useState(''),[wasteGrams,setWasteGrams]=useState('0');
  const [qcPassed,setQcPassed]=useState('true'),[findings,setFindings]=useState('Visual inspection completed'),[temperatureC,setTemperatureC]=useState('');
  const [netGrams,setNetGrams]=useState(''),[labelCode,setLabelCode]=useState('FP-'+Date.now().toString(36).toUpperCase()),[useBy,setUseBy]=useState(localInput(new Date(Date.now()+3*86400000)));
@@ -88,6 +89,17 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
  const selectedRun=options.runs.find(r=>r.id===runId);
  const assignableOrders=packedOrders.filter(o=>!selectedRun||(o.slot_id===selectedRun.slot_id&&o.delivery_date===selectedRun.delivery_date));
  const openStops=options.stops.filter(s=>['PENDING','ARRIVED'].includes(s.status));
+ async function lookupTraceability(){
+  if(!traceLotId)return;
+  setTraceBusy(true);setTraceError('');
+  try{
+   const rows=await apiRequest<Record<string,unknown>[]>(base,'/v1/ops/raw-lots/'+encodeURIComponent(traceLotId)+'/traceability',{token});
+   setTraceRows(rows);
+  }catch(e){
+   if(e instanceof FriendlyApiError&&e.status===401)sessionExpired.current();
+   setTraceError(e instanceof Error?e.message:'Unable to load raw-lot traceability');
+  }finally{setTraceBusy(false);}
+ }
  async function perform(path:string,payload:Record<string,unknown>,eventType:string,subjectType:string,success:string){
   setBusy(true);setError('');setNotice('');
   try{
@@ -157,7 +169,22 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
     <Field label="Finished output (grams)" type="number" value={outputGrams} onChange={setOutputGrams}/>
     <Field label="Trim waste (grams)" type="number" value={wasteGrams} onChange={setWasteGrams}/>
     <button className="fp-ops-submit" disabled={busy||!batchId}>Record batch output</button></form>)}
-   {tab==='Quality'&&roleCan(roles,'qc:approve')&&eventAction('Record QC inspection','Approve or reject only a batch that has completed production. A failed inspection moves the order to exception.',<form className="fp-ops-form" onSubmit={submit(async()=>{
+   {tab==='Quality'&&(roleCan(roles,'qc:approve')||roles.includes('PRODUCTION_SUPERVISOR'))&&eventAction('Trace raw material to customer delivery','Follow a received supplier lot through production batches, QC, pack labels and proof of delivery. Results are restricted to this organisation.',<>
+     <div className="fp-ops-form">
+      <Choice label="Raw material lot" value={traceLotId} onChange={v=>{setTraceLotId(v);setTraceRows([]);}} options={options.rawLots.map(l=>({value:l.id,label:l.vegetable+' · '+(l.supplier_lot||l.id.slice(0,8))+' · '+(Number(l.usable_grams)/1000).toFixed(2)+' kg usable'}))} full/>
+      <button type="button" className="fp-ops-submit" disabled={traceBusy||!traceLotId} onClick={()=>void lookupTraceability()}>{traceBusy?'Tracing…':'Trace lot history'}</button>
+      {traceError&&<p className="fp-ops-message error" role="alert">{traceError}</p>}
+     </div>
+     {traceRows.map((r,i)=><div className="fp-ops-action" key={String(r.batch_id||r.raw_lot_id)+i}>
+      <strong>{String(r.vegetable||'Raw lot')} · {String(r.supplier_lot||String(r.raw_lot_id||'').slice(0,8))}</strong>
+      <p>Supplier: {String(r.supplier||'—')} · Batch: {String(r.batch_id||'Not yet processed')} · Batch state: {String(r.batch_state||'—')}</p>
+      <p>Input {((Number(r.input_grams)||0)/1000).toFixed(2)} kg · Output {((Number(r.output_grams)||0)/1000).toFixed(2)} kg · Waste {((Number(r.waste_grams)||0)/1000).toFixed(2)} kg</p>
+      <p>Customer: {String(r.customer||'Not allocated')} · Kitchen: {String(r.kitchen||'—')} · Order: {String(r.order_id||'—')}</p>
+      <p>Pack: {String(r.label_code||'Not packed')} · Net {((Number(r.net_grams)||0)/1000).toFixed(2)} kg · Use by: {String(r.use_by||'—')}</p>
+      <p>Delivery: {String(r.delivery_status||'Not dispatched')} · Received by: {String(r.received_by||'—')} · Delivered: {String(r.delivered_at||'—')}</p>
+     </div>)}
+    </>)}
+ {tab==='Quality'&&roleCan(roles,'qc:approve')&&eventAction('Record QC inspection','Approve or reject only a batch that has completed production. A failed inspection moves the order to exception.',<form className="fp-ops-form" onSubmit={submit(async()=>{
     await perform('/v1/ops/batches/'+encodeURIComponent(batchId)+'/qc',{passed:qcPassed==='true',findings,temperatureC:temperatureC===''?undefined:Number(temperatureC)},'QC_CHECK_RECORDED','QC_CHECK',qcPassed==='true'?'QC passed.':'QC failed and order flagged for exception.');
     setFindings('Visual inspection completed');setTemperatureC('');
    })}>
