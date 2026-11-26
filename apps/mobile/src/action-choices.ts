@@ -1,4 +1,4 @@
-export type ActionMutation='SUPPLIER'|'PURCHASE'|'RECEIVE'|'BATCH'|'COMPLETE'|'QC'|'REWORK'|'PACK'|'RUN'|'STOP'|'ARRIVE'|'POD';
+export type ActionMutation='SUPPLIER'|'PURCHASE'|'RECEIVE'|'BATCH'|'COMPLETE'|'QC'|'REWORK'|'PACK'|'RUN'|'STOP'|'ARRIVE'|'POD'|'FAIL'|'RETRY';
 export type ActionOrderItem={variantId:string;vegetableId:string;description:string;grams:number|string};
 export type ActionOptions={
  suppliers:{id:string;name:string;active:boolean}[];
@@ -19,7 +19,7 @@ export function isActionChoiceField(action:ActionMutation,key:string):boolean{
  return ({
   PURCHASE:['supplierId'],RECEIVE:['id','vegetableId'],
   BATCH:['orderId','variantId','rawLotId'],COMPLETE:['id'],QC:['id'],REWORK:['id'],PACK:['id'],
-  RUN:['slotId','driverId'],STOP:['id','orderId'],ARRIVE:['id'],POD:['id'],SUPPLIER:[]
+  RUN:['slotId','driverId'],STOP:['id','orderId'],ARRIVE:['id'],POD:['id'],FAIL:['id'],RETRY:['id'],SUPPLIER:[]
  } as Record<ActionMutation,string[]>)[action].includes(key);
 }
 const short=(id:string)=>id.slice(0,8);
@@ -66,6 +66,12 @@ export function actionChoicesForField(action:ActionMutation,key:string,options:A
    .map(x=>({value:x.id,label:x.delivery_date+' · '+x.slot_label+' · '+x.customer+' / '+x.kitchen+' · #'+x.stop_number}));
  if(action==='POD'&&key==='id')
   return options.stops.filter(x=>['PENDING','ARRIVED'].includes(x.status))
+   .map(x=>({value:x.id,label:x.delivery_date+' · '+x.slot_label+' · '+x.customer+' / '+x.kitchen+' · #'+x.stop_number}));
+ if(action==='FAIL'&&key==='id')
+  return options.stops.filter(x=>['PENDING','ARRIVED'].includes(x.status))
+   .map(x=>({value:x.id,label:x.delivery_date+' · '+x.slot_label+' · '+x.customer+' / '+x.kitchen+' · #'+x.stop_number}));
+ if(action==='RETRY'&&key==='id')
+  return options.stops.filter(x=>x.status==='FAILED')
    .map(x=>({value:x.id,label:x.delivery_date+' · '+x.slot_label+' · '+x.customer+' / '+x.kitchen+' · #'+x.stop_number}));
  return [];
 }
