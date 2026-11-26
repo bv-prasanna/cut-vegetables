@@ -40,12 +40,14 @@ describe('mobile operational selection options',()=>{
   expect(actionChoicesForField('RUN','driverId',options,{}).map(x=>x.value)).toEqual(['d1']);
   expect(actionChoicesForField('STOP','id',options,{}).map(x=>x.value)).toEqual(['r1']);
   expect(actionChoicesForField('STOP','orderId',options,{id:'r1'})).toHaveLength(0);
+  expect(actionChoicesForField('ARRIVE','id',options,{}).map(x=>x.value)).toEqual(['st1']);
   expect(actionChoicesForField('POD','id',options,{}).map(x=>x.value)).toEqual(['st1']);
  });
  it('identifies selector fields so the app never falls back to asking staff to type UUIDs',()=>{
   expect(isActionChoiceField('BATCH','orderId')).toBe(true);
   expect(isActionChoiceField('QC','id')).toBe(true);
   expect(isActionChoiceField('REWORK','id')).toBe(true);
+  expect(isActionChoiceField('ARRIVE','id')).toBe(true);
   expect(isActionChoiceField('POD','id')).toBe(true);
   expect(isActionChoiceField('SUPPLIER','name')).toBe(false);
  });
