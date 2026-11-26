@@ -1,4 +1,4 @@
-export type ActionMutation='SUPPLIER'|'PURCHASE'|'RECEIVE'|'BATCH'|'COMPLETE'|'QC'|'PACK'|'RUN'|'STOP'|'POD';
+export type ActionMutation='SUPPLIER'|'PURCHASE'|'RECEIVE'|'BATCH'|'COMPLETE'|'QC'|'REWORK'|'PACK'|'RUN'|'STOP'|'POD';
 export type ActionOrderItem={variantId:string;vegetableId:string;description:string;grams:number|string};
 export type ActionOptions={
  suppliers:{id:string;name:string;active:boolean}[];
@@ -18,7 +18,7 @@ export const emptyActionOptions:ActionOptions={suppliers:[],purchases:[],vegetab
 export function isActionChoiceField(action:ActionMutation,key:string):boolean{
  return ({
   PURCHASE:['supplierId'],RECEIVE:['id','vegetableId'],
-  BATCH:['orderId','variantId','rawLotId'],COMPLETE:['id'],QC:['id'],PACK:['id'],
+  BATCH:['orderId','variantId','rawLotId'],COMPLETE:['id'],QC:['id'],REWORK:['id'],PACK:['id'],
   RUN:['slotId','driverId'],STOP:['id','orderId'],POD:['id'],SUPPLIER:[]
  } as Record<ActionMutation,string[]>)[action].includes(key);
 }
@@ -46,6 +46,8 @@ export function actionChoicesForField(action:ActionMutation,key:string,options:A
   return options.batches.filter(x=>x.state==='PROCESSING').map(x=>({value:x.id,label:x.vegetable+' · '+x.preparation+' · '+x.size+' · '+short(x.id)}));
  if(key==='id'&&action==='QC')
   return options.batches.filter(x=>x.state==='AWAITING_QC').map(x=>({value:x.id,label:x.vegetable+' · '+x.preparation+' · '+x.size+' · '+short(x.id)}));
+ if(key==='id'&&action==='REWORK')
+  return options.batches.filter(x=>x.state==='QC_FAILED').map(x=>({value:x.id,label:x.vegetable+' · '+x.preparation+' · '+x.size+' · '+short(x.id)}));
  if(key==='id'&&action==='PACK')
   return options.batches.filter(x=>['QC_PASSED','PACKED'].includes(x.state)).map(x=>({value:x.id,label:x.vegetable+' · '+x.preparation+' · '+x.size+' · '+short(x.id)}));
  if(action==='RUN'&&key==='slotId')
