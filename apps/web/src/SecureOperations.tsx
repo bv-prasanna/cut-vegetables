@@ -91,6 +91,7 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
  const selectedRun=options.runs.find(r=>r.id===runId);
  const assignableOrders=packedOrders.filter(o=>!selectedRun||(o.slot_id===selectedRun.slot_id&&o.delivery_date===selectedRun.delivery_date));
  const openStops=options.stops.filter(s=>['PENDING','ARRIVED'].includes(s.status));
+ const failedStops=options.stops.filter(s=>s.status==='FAILED');
  async function lookupTraceability(){
   if(!traceLotId)return;
   setTraceBusy(true);setTraceError('');
