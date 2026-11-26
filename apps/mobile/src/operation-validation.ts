@@ -2,7 +2,7 @@
  * Server Zod, JWT scopes, database locks and audit records remain authoritative.
  * UI validation exists to prevent wasting operator time with malformed forms.
  */
-export type OperationName='SUPPLIER'|'PURCHASE'|'RECEIVE'|'BATCH'|'COMPLETE'|'QC'|'PACK'|'RUN'|'STOP'|'POD';
+export type OperationName='SUPPLIER'|'PURCHASE'|'RECEIVE'|'BATCH'|'COMPLETE'|'QC'|'REWORK'|'PACK'|'RUN'|'STOP'|'ARRIVE'|'POD';
 export type OperationFields=Record<string,string>;
 const requiredByOperation:Record<OperationName,string[]>={
  SUPPLIER:['name'],PURCHASE:['supplierId'],
@@ -10,9 +10,11 @@ const requiredByOperation:Record<OperationName,string[]>={
  BATCH:['orderId','variantId','rawLotId','inputGrams'],
  COMPLETE:['id','outputGrams','wasteGrams'],
  QC:['id','passed','findings'],
+ REWORK:['id','note'],
  PACK:['id','netGrams','labelCode','useBy'],
  RUN:['slotId','deliveryDate','driverId'],
  STOP:['id','orderId','stopNumber'],
+ ARRIVE:['id'],
  POD:['id','receivedBy']
 };
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -42,6 +44,7 @@ export function validateOperationInput(op:OperationName,fields:OperationFields,n
   if(Number(fields.usableGrams)+Number(fields.rejectedGrams)>Number(fields.receivedGrams))
    return 'Usable plus rejected grams cannot exceed the received weight.';
  }
+ if(op==='REWORK'&&fields.note.trim().length<5)return 'Record the corrective action in at least 5 characters before rework.';
  if(op==='QC'){
   if(!['true','false'].includes(fields.passed?.toLowerCase()||''))return 'Choose Pass QC or Reject batch.';
   if(fields.findings.trim().length<3)return 'Inspection findings must have at least 3 characters.';
