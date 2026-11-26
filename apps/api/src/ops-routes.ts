@@ -316,7 +316,7 @@ app.post('/ops/batches/:id/pack',async c=>{
    if(stop.driver_id!==c.get('userId'))throw new BusinessFailure(403,'Only the assigned driver can mark arrival');
    if(stop.status!=='PENDING')throw new BusinessFailure(409,'Only a pending delivery stop can be marked arrived');
    await tx.query("UPDATE delivery_stops SET status='ARRIVED',arrived_at=now() WHERE id=$1",[idParam(c)]);
-   const eventId=await recordEvent(tx,c.get('organizationId'),c.get('userId'),input.event,'DELIVERY_STOP_ARRIVED','DELIVERY_STOP',idParam(c));
+   const eventId=await recordEvent(tx,c.get('organizationId'),c.get('userId'),{...input.event,details:{...input.event.details,arrivalNote:input.notes??null}},'DELIVERY_STOP_ARRIVED','DELIVERY_STOP',idParam(c));
    return {id:idParam(c),status:'ARRIVED',eventId,notes:input.notes??null};
   });
   return c.json(data,200);
