@@ -2,7 +2,7 @@
  * Server Zod, JWT scopes, database locks and audit records remain authoritative.
  * UI validation exists to prevent wasting operator time with malformed forms.
  */
-export type OperationName='SUPPLIER'|'PURCHASE'|'RECEIVE'|'BATCH'|'COMPLETE'|'QC'|'REWORK'|'PACK'|'RUN'|'STOP'|'ARRIVE'|'POD';
+export type OperationName='SUPPLIER'|'PURCHASE'|'RECEIVE'|'BATCH'|'COMPLETE'|'QC'|'REWORK'|'PACK'|'RUN'|'STOP'|'ARRIVE'|'POD'|'FAIL'|'RETRY';
 export type OperationFields=Record<string,string>;
 const requiredByOperation:Record<OperationName,string[]>={
  SUPPLIER:['name'],PURCHASE:['supplierId'],
@@ -15,7 +15,9 @@ const requiredByOperation:Record<OperationName,string[]>={
  RUN:['slotId','deliveryDate','driverId'],
  STOP:['id','orderId','stopNumber'],
  ARRIVE:['id'],
- POD:['id','receivedBy']
+ POD:['id','receivedBy'],
+ FAIL:['id','reasonCode','notes'],
+ RETRY:['id','notes']
 };
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const identifierFields=new Set(['id','supplierId','vegetableId','orderId','variantId','rawLotId','slotId','driverId']);
@@ -45,6 +47,12 @@ export function validateOperationInput(op:OperationName,fields:OperationFields,n
    return 'Usable plus rejected grams cannot exceed the received weight.';
  }
  if(op==='REWORK'&&fields.note.trim().length<5)return 'Record the corrective action in at least 5 characters before rework.';
+ if(op==='FAIL'){
+  const reasons=['CUSTOMER_UNAVAILABLE','ADDRESS_NOT_FOUND','ACCESS_BLOCKED','VEHICLE_ISSUE','ITEM_SHORTAGE','CUSTOMER_REFUSED','OTHER'];
+  if(!reasons.includes(fields.reasonCode.trim()))return 'Choose a supported delivery failure reason.';
+  if(fields.notes.trim().length<5)return 'Explain the failed delivery in at least 5 characters.';
+ }
+ if(op==='RETRY'&&fields.notes.trim().length<5)return 'Add a redelivery note of at least 5 characters.';
  if(op==='QC'){
   if(!['true','false'].includes(fields.passed?.toLowerCase()||''))return 'Choose Pass QC or Reject batch.';
   if(fields.findings.trim().length<3)return 'Inspection findings must have at least 3 characters.';
