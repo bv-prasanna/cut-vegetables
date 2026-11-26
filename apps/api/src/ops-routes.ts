@@ -17,6 +17,7 @@ const receiveSchema=withEvent({vegetableId:uuid,receivedGrams:weight,usableGrams
 const batchSchema=withEvent({orderId:uuid,variantId:uuid,rawLotId:uuid,inputGrams:weight});
 const yieldSchema=withEvent({outputGrams:z.number().int().nonnegative(),wasteGrams:z.number().int().nonnegative()});
 const qcSchema=withEvent({passed:z.boolean(),findings:z.string().trim().min(3).max(800),temperatureC:z.number().finite().min(-40).max(100).optional()});
+const reworkSchema=withEvent({note:z.string().trim().min(5).max(800)});
 const packSchema=withEvent({netGrams:weight,labelCode:z.string().trim().min(3).max(100),useBy:z.string().datetime({offset:true})});
 const runSchema=withEvent({slotId:uuid,deliveryDate:z.string().date(),driverId:uuid});
 const stopSchema=withEvent({orderId:uuid,stopNumber:z.number().int().positive().max(1000)});
@@ -226,7 +227,24 @@ export function createOperationsRoutes(pool:Pool){
   });
   return c.json(data,201);
  });
- app.post('/ops/batches/:id/pack',async c=>{
+ app.post('/ops/batches/:id/rework',async c=>{
+  requirePermission(c,'production:rework');
+  const input=await body(c,reworkSchema);
+  const data=await inTransaction(pool,async tx=>{
+   const batch=requireRow((await tx.query<{state:string;order_id:string;order_state:string}>(`SELECT pb.state,pb.order_id,o.state AS order_state
+    FROM production_batches pb JOIN orders o ON o.id=pb.order_id
+    WHERE pb.id=$1 AND o.producer_organization_id=$2 FOR UPDATE OF pb,o`,
+    [idParam(c),c.get('organizationId')])).rows);
+   if(batch.state!=='QC_FAILED')throw new BusinessFailure(409,'Only a QC-failed batch can be sent for rework');
+   if(batch.order_state!=='EXCEPTION')throw new BusinessFailure(409,'Order is not in an exception state for rework');
+   await tx.query(`UPDATE production_batches SET state='PROCESSING',output_grams=NULL,waste_grams=NULL,completed_at=NULL WHERE id=$1`,[idParam(c)]);
+   await tx.query("UPDATE orders SET state='IN_PRODUCTION' WHERE id=$1 AND state='EXCEPTION'",[batch.order_id]);
+   const eventId=await recordEvent(tx,c.get('organizationId'),c.get('userId'),input.event,'PRODUCTION_BATCH_REWORK_REQUESTED','BATCH',idParam(c));
+   return {id:idParam(c),state:'PROCESSING',orderState:'IN_PRODUCTION',eventId};
+  });
+  return c.json(data,200);
+ });
+app.post('/ops/batches/:id/pack',async c=>{
   requirePermission(c,'packing:write');
   const input=await body(c,packSchema);
   if(new Date(input.useBy).getTime()<=Date.now())throw new BusinessFailure(422,'Use-by must be in the future');
