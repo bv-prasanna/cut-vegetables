@@ -22,6 +22,7 @@ const packSchema=withEvent({netGrams:weight,labelCode:z.string().trim().min(3).m
 const runSchema=withEvent({slotId:uuid,deliveryDate:z.string().date(),driverId:uuid});
 const stopSchema=withEvent({orderId:uuid,stopNumber:z.number().int().positive().max(1000)});
 const podSchema=withEvent({receivedBy:z.string().trim().min(2).max(120),notes:z.string().trim().max(400).optional()});
+const arrivalSchema=withEvent({notes:z.string().trim().max(400).optional()});
 function requirePermission(c:Context<Env>,permission:string){
  if(!canAny(c.get('roles'),permission))throw new BusinessFailure(403,'Permission denied');
 }
@@ -304,7 +305,23 @@ app.post('/ops/batches/:id/pack',async c=>{
   });
   return c.json(data,201);
  });
- app.post('/ops/stops/:id/complete',async c=>{
+ app.post('/ops/stops/:id/arrive',async c=>{
+  requirePermission(c,'delivery:pod');
+  const input=await body(c,arrivalSchema);
+  const data=await inTransaction(pool,async tx=>{
+   const stop=requireRow((await tx.query<{status:string;driver_id:string}>(`SELECT ds.status,dr.driver_id
+    FROM delivery_stops ds JOIN delivery_runs dr ON dr.id=ds.run_id
+    WHERE ds.id=$1 AND dr.producer_organization_id=$2 FOR UPDATE OF ds`,
+    [idParam(c),c.get('organizationId')])).rows);
+   if(stop.driver_id!==c.get('userId'))throw new BusinessFailure(403,'Only the assigned driver can mark arrival');
+   if(stop.status!=='PENDING')throw new BusinessFailure(409,'Only a pending delivery stop can be marked arrived');
+   await tx.query("UPDATE delivery_stops SET status='ARRIVED',arrived_at=now() WHERE id=$1",[idParam(c)]);
+   const eventId=await recordEvent(tx,c.get('organizationId'),c.get('userId'),input.event,'DELIVERY_STOP_ARRIVED','DELIVERY_STOP',idParam(c));
+   return {id:idParam(c),status:'ARRIVED',eventId,notes:input.notes??null};
+  });
+  return c.json(data,200);
+ });
+app.post('/ops/stops/:id/complete',async c=>{
   requirePermission(c,'delivery:pod');
   const input=await body(c,podSchema);
   const data=await inTransaction(pool,async tx=>{
