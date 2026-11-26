@@ -67,6 +67,8 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
  const [qcPassed,setQcPassed]=useState('true'),[findings,setFindings]=useState('Visual inspection completed'),[temperatureC,setTemperatureC]=useState('');
  const [netGrams,setNetGrams]=useState(''),[labelCode,setLabelCode]=useState('FP-'+Date.now().toString(36).toUpperCase()),[useBy,setUseBy]=useState(localInput(new Date(Date.now()+3*86400000)));
  const [driverId,setDriverId]=useState(''),[slotId,setSlotId]=useState(''),[runId,setRunId]=useState(''),[stopNumber,setStopNumber]=useState('1'),[arrivalStopId,setArrivalStopId]=useState(''),[podStopId,setPodStopId]=useState(''),[receivedBy,setReceivedBy]=useState(''),[podNotes,setPodNotes]=useState('');
+ const [failedStopId,setFailedStopId]=useState(''),[failureReason,setFailureReason]=useState('CUSTOMER_UNAVAILABLE'),[failureNotes,setFailureNotes]=useState('');
+ const [retryStopId,setRetryStopId]=useState(''),[retryNotes,setRetryNotes]=useState('');
  const load=useCallback(async()=>{
   setLoading(true);setError('');
   try{
@@ -226,6 +228,27 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
      <Choice label="Pending assigned stop" value={arrivalStopId} onChange={setArrivalStopId} options={options.stops.filter(s=>s.status==='PENDING').map(s=>({value:s.id,label:s.delivery_date+' · '+s.slot_label+' · '+s.customer+' / '+s.kitchen+' · stop '+s.stop_number}))} full/>
      <Field label="Arrival note" value={podNotes} onChange={setPodNotes} required={false} full/>
      <button className="fp-ops-submit" disabled={busy||!arrivalStopId}>Mark arrived</button></form>)}
+ {tab==='Delivery'&&roleCan(roles,'delivery:pod')&&eventAction('Record failed delivery','Only the assigned driver can record a failed handover. The order is flagged for supplier follow-up and the attempt is retained.',<form className="fp-ops-form" onSubmit={submit(async()=>{
+     if(failureNotes.trim().length<5){setError('Describe what happened in at least 5 characters.');return;}
+     await perform('/v1/ops/stops/'+encodeURIComponent(failedStopId)+'/exception',{outcome:'FAILED',reasonCode:failureReason,notes:failureNotes.trim()},'DELIVERY_ATTEMPT_FAILED','DELIVERY_STOP','Failed delivery recorded. Dispatch can now arrange a retry.');
+     setFailedStopId('');setFailureNotes('');
+    })}>
+     <Choice label="Assigned open stop" value={failedStopId} onChange={setFailedStopId} options={openStops.map(s=>({value:s.id,label:s.delivery_date+' · '+s.slot_label+' · '+s.customer+' / '+s.kitchen+' · stop '+s.stop_number}))} full/>
+     <Choice label="Failure reason" value={failureReason} onChange={setFailureReason} options={[
+      {value:'CUSTOMER_UNAVAILABLE',label:'Customer unavailable'},{value:'ADDRESS_NOT_FOUND',label:'Address not found'},
+      {value:'ACCESS_BLOCKED',label:'Access blocked'},{value:'VEHICLE_ISSUE',label:'Vehicle issue'},
+      {value:'ITEM_SHORTAGE',label:'Item shortage'},{value:'CUSTOMER_REFUSED',label:'Customer refused'},{value:'OTHER',label:'Other'}
+     ]}/>
+     <Field label="What happened?" value={failureNotes} onChange={setFailureNotes} full/>
+     <button className="fp-ops-submit" disabled={busy||!failedStopId||failureNotes.trim().length<5}>Record failed delivery</button></form>)}
+ {tab==='Delivery'&&roleCan(roles,'delivery:assign')&&eventAction('Schedule a failed-stop retry','Dispatch can retry only a fully failed stop. Partially delivered orders remain in exception for a support/resupply decision.',<form className="fp-ops-form" onSubmit={submit(async()=>{
+     if(retryNotes.trim().length<5){setError('Add a redelivery note in at least 5 characters.');return;}
+     await perform('/v1/ops/stops/'+encodeURIComponent(retryStopId)+'/retry',{notes:retryNotes.trim()},'DELIVERY_RETRY_SCHEDULED','DELIVERY_STOP','Redelivery retry scheduled. The assigned driver can record a new arrival and proof.');
+     setRetryStopId('');setRetryNotes('');
+    })}>
+     <Choice label="Failed delivery stop" value={retryStopId} onChange={setRetryStopId} options={failedStops.map(s=>({value:s.id,label:s.delivery_date+' · '+s.slot_label+' · '+s.customer+' / '+s.kitchen+' · stop '+s.stop_number}))} full/>
+     <Field label="Redelivery note" value={retryNotes} onChange={setRetryNotes} full/>
+     <button className="fp-ops-submit" disabled={busy||!retryStopId||retryNotes.trim().length<5}>Schedule retry</button></form>)}
  {tab==='Delivery'&&roleCan(roles,'delivery:pod')&&eventAction('Confirm proof of delivery','Only the driver assigned to the selected open stop can complete handover.',<form className="fp-ops-form" onSubmit={submit(async()=>{
     await perform('/v1/ops/stops/'+encodeURIComponent(podStopId)+'/complete',{receivedBy,notes:podNotes||undefined},'DELIVERY_POD_CAPTURED','DELIVERY_STOP','Delivery handover recorded with an auditable proof record.');
     setReceivedBy('');setPodNotes('');setPodStopId('');
