@@ -11,6 +11,7 @@ import {isRole,canAny,type Role} from './authorization.js';
 import {geoEventSchema} from './geo-events.js';
 import {cutoffInstant,localDate} from './scheduling.js';
 import {createOperationsRoutes} from './ops-routes.js';
+import {createDeliveryExceptionRoutes} from './delivery-exception-routes.js';
 import {createStaffBoardRoutes} from './staff-query-routes.js';
 import {createRecurrenceRoutes} from './recurrence-routes.js';
 import {createCatalogAdminRoutes} from './catalog-admin.js';
@@ -275,6 +276,7 @@ export function createProductionApp(pool:Pool,clock:()=>Date=()=>new Date(),jwtS
  app.route('/v1',createCatalogAdminRoutes(pool));
  app.route('/v1',createAdminRoutes(pool));
  app.route('/v1',createOperationsRoutes(pool));
+ app.route('/v1',createDeliveryExceptionRoutes(pool));
  app.route('/v1',createStaffBoardRoutes(pool));
  app.route('/',createMarketingRoutes(pool,clock));
  app.onError((err,c)=>{console.error('API error',err.message);return c.json(reject('Internal server error'),500);});
