@@ -285,7 +285,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
  });
  it('executes and audits procurement → cutter → QC → packer → dispatch → assigned-driver POD',async()=>{
   expect(orderId).toBeTruthy();
-  const actorRoles=['PROCUREMENT','OPERATOR','QC','PACKER','DISPATCH','DRIVER'] as const;
+  const actorRoles=['PROCUREMENT','OPERATOR','PRODUCTION_SUPERVISOR','QC','PACKER','DISPATCH','DRIVER'] as const;
   const accounts=new Map<string,{id:string;token:string}>();
   for(const role of actorRoles){
    const email='uat-'+role.toLowerCase()+'@example.invalid';
@@ -346,8 +346,28 @@ suite('real PostgreSQL UAT and negative flows',()=>{
    outputGrams:grams,wasteGrams:0,event:ev('PRODUCTION_BATCH_COMPLETED','BATCH')
   },actor('OPERATOR'));
   expect(complete.status).toBe(200);
+  const failedQc=await request('/v1/ops/batches/'+batchId+'/qc','POST',{
+   passed:false,findings:'Foreign material detected; isolate and rework batch',
+   temperatureC:5,event:ev('QC_CHECK_RECORDED','QC_CHECK')
+  },actor('QC'));
+  expect(failedQc.status).toBe(201);
+  expect((await pool.query<{state:string}>('SELECT state FROM orders WHERE id=$1',[orderId])).rows[0].state).toBe('EXCEPTION');
+  const operatorCannotRework=await request('/v1/ops/batches/'+batchId+'/rework','POST',{
+   note:'Remove foreign material and repeat inspection',event:ev('PRODUCTION_BATCH_REWORK_REQUESTED','BATCH')
+  },actor('OPERATOR'));
+  expect(operatorCannotRework.status).toBe(403);
+  const rework=await request('/v1/ops/batches/'+batchId+'/rework','POST',{
+   note:'Foreign material removed; batch segregated and reprocessed under supervisor oversight',
+   event:ev('PRODUCTION_BATCH_REWORK_REQUESTED','BATCH')
+  },actor('PRODUCTION_SUPERVISOR'));
+  expect(rework.status).toBe(200);
+  expect(await rework.json()).toMatchObject({id:batchId,state:'PROCESSING',orderState:'IN_PRODUCTION'});
+  const repeatComplete=await request('/v1/ops/batches/'+batchId+'/complete','POST',{
+   outputGrams:grams,wasteGrams:0,event:ev('PRODUCTION_BATCH_COMPLETED','BATCH')
+  },actor('OPERATOR'));
+  expect(repeatComplete.status).toBe(200);
   const qc=await request('/v1/ops/batches/'+batchId+'/qc','POST',{
-   passed:true,findings:'Visual inspection passed; clean and verified',
+   passed:true,findings:'Rework verified; foreign material absent and product clean',
    temperatureC:5,event:ev('QC_CHECK_RECORDED','QC_CHECK')
   },actor('QC'));
   expect(qc.status).toBe(201);
