@@ -1,9 +1,9 @@
 # FreshPrep — 98% module completion plan
 
-**Status date:** 22 November 2026  
+**Status date:** 27 November 2026  
 **Repository:** bv-prasanna/cut-vegetables  
-**Current main commit:** cb1605187542af15d2fa564cfa6399a98af34ea5  
-**Latest CI run:** 44990780073 — 4/4 jobs passed  
+**Current main commit:** 1cb92f08b27368fddf0206498cf4a2b1be9bb9ae  
+**Latest CI run:** 45887541891 — 4/4 jobs passed  
 **Release state:** private staging candidate only; customer UAT is not certified and production is not ready.
 
 ## What 98% means
@@ -61,6 +61,9 @@ The percentages below are engineering estimates of implemented functionality, no
 - Latest CI run 45259257726 passed 4/4 jobs: API/Web, PostgreSQL lifecycle/negative tests, Expo mobile, and Chromium browser UAT.
 - Notifications: new user-scoped inbox and category preferences, read/unread state, unread filtering, mark-all-read and tenant-safe recipient delivery. Transactional notifications are emitted for order confirmation, support case creation/status, verified delivery, loyalty awards, provisional invoices, receipts and approved credit notes. Web and mobile inboxes are available. Email, SMS and push providers are not connected; these remain explicit release gaps.
 - Latest CI run 45260866295 passed 4/4 jobs: API/Web, PostgreSQL migrations and lifecycle/negative tests, Expo mobile, and Chromium browser UAT.
+- Refund workflow: supplier finance can create refund requests only for resolved support cases explicitly marked REFUND; amount is capped at paid invoice allocations less active/refunded requests and approved credit notes. Requests are idempotent and tenant-scoped, with audited REQUESTED → APPROVED → PROCESSING → REFUNDED/FAILED transitions, mandatory settlement reference/failure reason, and customer refund history/notifications on web and mobile. Manual recording only: no Razorpay/bank API is connected, so a REFUNDED status requires staff to enter an externally confirmed reference.
+- Latest quality gate 45887541891 passed 4/4 jobs (API/Web, PostgreSQL, Expo Mobile, Chromium) after correcting the admin-insights test to respect the 12-event recent-feed limit. The POD audit itself is independently asserted against PostgreSQL event_log.
+- Recurring-order workflow was repaired to run without a nonexistent npm lockfile and to avoid failing scheduled runs while production secrets are absent. Scheduled generation remains inactive until FRESHPREP_DATABASE_URL and FRESHPREP_PRODUCER_ORG_ID are configured; a manual run without those secrets fails clearly.
 
 ## Completion sequence
 
