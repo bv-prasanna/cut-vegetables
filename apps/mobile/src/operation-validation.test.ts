@@ -41,6 +41,10 @@ describe('staff physical work forms',()=>{
   expect(validateOperationInput('RETRY',{id,notes:'no'})).toContain('redelivery note');
   valid('RETRY',{id,notes:'Customer confirmed availability for a new attempt'});
  });
+ it('requires a positive delivered quantity and reason for partial handover',()=>{
+  expect(validateOperationInput('PARTIAL',{id,reasonCode:'ITEM_SHORTAGE',deliveredGrams:'0',notes:'One item missing'})).toContain('allowed weight range');
+  valid('PARTIAL',{id,reasonCode:'ITEM_SHORTAGE',deliveredGrams:'250',notes:'One item was short at handover'});
+ });
  it('rejects invalid delivery dates, route stops and missing receiver names',()=>{
   expect(validateOperationInput('RUN',{slotId:id,driverId:id,deliveryDate:'2026-02-30'})).toContain('valid delivery date');
   expect(validateOperationInput('STOP',{id,orderId:id,stopNumber:'0'})).toContain('between 1 and 1000');
