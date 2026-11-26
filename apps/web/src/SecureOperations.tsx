@@ -68,6 +68,7 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
  const [netGrams,setNetGrams]=useState(''),[labelCode,setLabelCode]=useState('FP-'+Date.now().toString(36).toUpperCase()),[useBy,setUseBy]=useState(localInput(new Date(Date.now()+3*86400000)));
  const [driverId,setDriverId]=useState(''),[slotId,setSlotId]=useState(''),[runId,setRunId]=useState(''),[stopNumber,setStopNumber]=useState('1'),[arrivalStopId,setArrivalStopId]=useState(''),[podStopId,setPodStopId]=useState(''),[receivedBy,setReceivedBy]=useState(''),[podNotes,setPodNotes]=useState('');
  const [failedStopId,setFailedStopId]=useState(''),[failureReason,setFailureReason]=useState('CUSTOMER_UNAVAILABLE'),[failureNotes,setFailureNotes]=useState('');
+ const [partialStopId,setPartialStopId]=useState(''),[partialDeliveredGrams,setPartialDeliveredGrams]=useState(''),[partialNotes,setPartialNotes]=useState('');
  const [retryStopId,setRetryStopId]=useState(''),[retryNotes,setRetryNotes]=useState('');
  const load=useCallback(async()=>{
   setLoading(true);setError('');
@@ -229,6 +230,22 @@ export default function SecureOperations({base,token,tab,roles,date,onChanged,on
      <Choice label="Pending assigned stop" value={arrivalStopId} onChange={setArrivalStopId} options={options.stops.filter(s=>s.status==='PENDING').map(s=>({value:s.id,label:s.delivery_date+' · '+s.slot_label+' · '+s.customer+' / '+s.kitchen+' · stop '+s.stop_number}))} full/>
      <Field label="Arrival note" value={podNotes} onChange={setPodNotes} required={false} full/>
      <button className="fp-ops-submit" disabled={busy||!arrivalStopId}>Mark arrived</button></form>)}
+ {tab==='Delivery'&&roleCan(roles,'delivery:pod')&&eventAction('Record partial delivery','Record the actual quantity handed over and the reason for the shortage. The order enters exception for an explicit support/resupply decision; it is not automatically retried.',<form className="fp-ops-form" onSubmit={submit(async()=>{
+     const delivered=Number(partialDeliveredGrams);
+     if(!Number.isSafeInteger(delivered)||delivered<=0){setError('Delivered quantity must be a positive whole number of grams.');return;}
+     if(partialNotes.trim().length<5){setError('Describe the partial handover in at least 5 characters.');return;}
+     await perform('/v1/ops/stops/'+encodeURIComponent(partialStopId)+'/exception',{outcome:'PARTIAL',reasonCode:failureReason,deliveredGrams:delivered,notes:partialNotes.trim()},'DELIVERY_ATTEMPT_PARTIAL','DELIVERY_STOP','Partial delivery recorded. Supplier support must review the outstanding quantity.');
+     setPartialStopId('');setPartialDeliveredGrams('');setPartialNotes('');
+    })}>
+     <Choice label="Assigned open stop" value={partialStopId} onChange={setPartialStopId} options={openStops.map(s=>({value:s.id,label:s.delivery_date+' · '+s.slot_label+' · '+s.customer+' / '+s.kitchen+' · stop '+s.stop_number}))} full/>
+     <Choice label="Delivery exception reason" value={failureReason} onChange={setFailureReason} options={[
+      {value:'CUSTOMER_UNAVAILABLE',label:'Customer unavailable'},{value:'ADDRESS_NOT_FOUND',label:'Address not found'},
+      {value:'ACCESS_BLOCKED',label:'Access blocked'},{value:'VEHICLE_ISSUE',label:'Vehicle issue'},
+      {value:'ITEM_SHORTAGE',label:'Item shortage'},{value:'CUSTOMER_REFUSED',label:'Customer refused'},{value:'OTHER',label:'Other'}
+     ]}/>
+     <Field label="Delivered quantity (grams)" type="number" value={partialDeliveredGrams} onChange={setPartialDeliveredGrams}/>
+     <Field label="Partial handover notes" value={partialNotes} onChange={setPartialNotes} full/>
+     <button className="fp-ops-submit" disabled={busy||!partialStopId||!Number.isSafeInteger(Number(partialDeliveredGrams))||Number(partialDeliveredGrams)<=0||partialNotes.trim().length<5}>Record partial delivery</button></form>)}
  {tab==='Delivery'&&roleCan(roles,'delivery:pod')&&eventAction('Record failed delivery','Only the assigned driver can record a failed handover. The order is flagged for supplier follow-up and the attempt is retained.',<form className="fp-ops-form" onSubmit={submit(async()=>{
      if(failureNotes.trim().length<5){setError('Describe what happened in at least 5 characters.');return;}
      await perform('/v1/ops/stops/'+encodeURIComponent(failedStopId)+'/exception',{outcome:'FAILED',reasonCode:failureReason,notes:failureNotes.trim()},'DELIVERY_ATTEMPT_FAILED','DELIVERY_STOP','Failed delivery recorded. Dispatch can now arrange a retry.');
