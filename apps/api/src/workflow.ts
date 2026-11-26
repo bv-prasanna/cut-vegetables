@@ -16,7 +16,7 @@ export function nextOrderState(from:OrderState,to:OrderState):OrderState{
  return to;
 }
 export function validateBatchYield(inputGrams:number,outputGrams:number,wasteGrams:number):boolean {
- return [inputGrams,outputGrams,wasteGrams].every(v=>Number.isSafeInteger(v)&&v>=0)&&inputGrams>0&&outputGrams+wasteGrams<=inputGrams;
+ return [inputGrams,outputGrams,wasteGrams].every(v=>Number.isSafeInteger(v)&&v>=0)&&inputGrams>0&&outputGrams+wasteGrams===inputGrams;
 }
 export function mayDispatchBatch(state:string,hasQcPass:boolean,hasValidPackLabel:boolean):boolean {
  return state==='PACKED'&&hasQcPass&&hasValidPackLabel;
