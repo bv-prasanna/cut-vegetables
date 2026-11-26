@@ -10,7 +10,8 @@ const options:ActionOptions={
  batches:[
   {id:'b1',order_id:'o1',variant_id:'var1',state:'PROCESSING',input_grams:1000,output_grams:null,waste_grams:null,delivery_date:'2026-11-24',slot_label:'Morning',vegetable:'Potato',preparation:'DICED',size:'10 mm'},
   {id:'b2',order_id:'o1',variant_id:'var1',state:'AWAITING_QC',input_grams:1000,output_grams:950,waste_grams:50,delivery_date:'2026-11-24',slot_label:'Morning',vegetable:'Potato',preparation:'DICED',size:'10 mm'},
-  {id:'b3',order_id:'o1',variant_id:'var1',state:'QC_PASSED',input_grams:1000,output_grams:950,waste_grams:50,delivery_date:'2026-11-24',slot_label:'Morning',vegetable:'Potato',preparation:'DICED',size:'10 mm'}
+  {id:'b3',order_id:'o1',variant_id:'var1',state:'QC_PASSED',input_grams:1000,output_grams:950,waste_grams:50,delivery_date:'2026-11-24',slot_label:'Morning',vegetable:'Potato',preparation:'DICED',size:'10 mm'},
+  {id:'b4',order_id:'o1',variant_id:'var1',state:'QC_FAILED',input_grams:1000,output_grams:900,waste_grams:100,delivery_date:'2026-11-24',slot_label:'Morning',vegetable:'Potato',preparation:'DICED',size:'10 mm'}
  ],
  drivers:[{id:'d1',email:'driver@example.invalid'}],
  slots:[{id:'slot1',label:'Morning',zone_code:'ZONE-A'}],
@@ -31,6 +32,7 @@ describe('mobile operational selection options',()=>{
  it('offers only batches at the correct state for completion, QC and packing',()=>{
   expect(actionChoicesForField('COMPLETE','id',options,{}).map(x=>x.value)).toEqual(['b1']);
   expect(actionChoicesForField('QC','id',options,{}).map(x=>x.value)).toEqual(['b2']);
+  expect(actionChoicesForField('REWORK','id',options,{}).map(x=>x.value)).toEqual(['b4']);
   expect(actionChoicesForField('PACK','id',options,{}).map(x=>x.value)).toEqual(['b3']);
  });
  it('limits dispatch and driver choices to compatible runs, packed orders and assigned open stops',()=>{
@@ -43,6 +45,7 @@ describe('mobile operational selection options',()=>{
  it('identifies selector fields so the app never falls back to asking staff to type UUIDs',()=>{
   expect(isActionChoiceField('BATCH','orderId')).toBe(true);
   expect(isActionChoiceField('QC','id')).toBe(true);
+  expect(isActionChoiceField('REWORK','id')).toBe(true);
   expect(isActionChoiceField('POD','id')).toBe(true);
   expect(isActionChoiceField('SUPPLIER','name')).toBe(false);
  });
