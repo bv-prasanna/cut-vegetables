@@ -27,6 +27,14 @@ describe('staff physical work forms',()=>{
   expect(validateOperationInput('PACK',{...x,useBy:'2099-11-20T08:00:00'})).toContain('timezone');
   expect(validateOperationInput('PACK',{...x,useBy:'2020-11-20T08:00:00+05:30'})).toContain('future');
  });
+ it('requires a meaningful supervisor corrective action before mobile rework',()=>{
+  expect(validateOperationInput('REWORK',{id,note:'bad'})).toContain('corrective action');
+  valid('REWORK',{id,note:'Remove foreign material and retest'});
+ });
+ it('requires an assigned stop identifier for arrival',()=>{
+  expect(validateOperationInput('ARRIVE',{})).toContain('id');
+  valid('ARRIVE',{id,notes:'Reached customer gate'});
+ });
  it('rejects invalid delivery dates, route stops and missing receiver names',()=>{
   expect(validateOperationInput('RUN',{slotId:id,driverId:id,deliveryDate:'2026-02-30'})).toContain('valid delivery date');
   expect(validateOperationInput('STOP',{id,orderId:id,stopNumber:'0'})).toContain('between 1 and 1000');
