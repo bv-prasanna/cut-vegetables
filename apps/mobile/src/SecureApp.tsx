@@ -37,7 +37,8 @@ const operations:Record<Mutation,Operation>={
  ARRIVE:{title:'Mark arrival at customer',path:'/v1/ops/stops/{id}/arrive',method:'POST',eventType:'DELIVERY_STOP_ARRIVED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select pending assigned stop'},{key:'notes',title:'Arrival note'}]},
  POD:{title:'Confirm delivery handover',path:'/v1/ops/stops/{id}/complete',method:'POST',eventType:'DELIVERY_POD_CAPTURED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select assigned delivery stop'},{key:'receivedBy',title:'Receiver full name'},{key:'notes',title:'Handover notes'}]},
  FAIL:{title:'Record failed delivery',path:'/v1/ops/stops/{id}/exception',method:'POST',eventType:'DELIVERY_ATTEMPT_FAILED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select pending assigned stop'},{key:'reasonCode',title:'Failure reason'},{key:'notes',title:'What happened?'}]},
- RETRY:{title:'Schedule delivery retry',path:'/v1/ops/stops/{id}/retry',method:'POST',eventType:'DELIVERY_RETRY_SCHEDULED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select failed delivery stop'},{key:'notes',title:'Redelivery note'}]}
+ RETRY:{title:'Schedule delivery retry',path:'/v1/ops/stops/{id}/retry',method:'POST',eventType:'DELIVERY_RETRY_SCHEDULED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select failed delivery stop'},{key:'notes',title:'Redelivery note'}]},
+ PARTIAL:{title:'Record partial delivery',path:'/v1/ops/stops/{id}/exception',method:'POST',eventType:'DELIVERY_ATTEMPT_PARTIAL',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select pending assigned stop'},{key:'reasonCode',title:'Delivery exception reason'},{key:'deliveredGrams',title:'Delivered grams',type:'number'},{key:'notes',title:'What was handed over?'}]}
 };
 const palette={green:'#175a3a',light:'#edf5ed',muted:'#748676'};
 const kg=(n:unknown)=>((Number(n)||0)/1000).toLocaleString('en-IN',{maximumFractionDigits:2})+' kg';
@@ -293,6 +294,7 @@ function AuthenticatedMobile(){
     payload[input.key]=input.type==='number'?Number(fields[input.key]):input.key==='passed'?fields[input.key].toLowerCase()==='true':fields[input.key].trim();
    }
    if(action==='FAIL')payload.outcome='FAILED';
+   if(action==='PARTIAL')payload.outcome='PARTIAL';
    const ev=await captureEvent(op,id||'pending');
    const path=op.path.replace('{id}',encodeURIComponent(id||''));
    await call(path,'POST',{...payload,event:ev});
@@ -305,7 +307,7 @@ function AuthenticatedMobile(){
   if(screen==='Cutting')return identity?.roles.includes('PRODUCTION_SUPERVISOR')||identity?.roles.includes('SUPERADMIN')?['BATCH','COMPLETE','REWORK']:['BATCH','COMPLETE'];
   if(screen==='Quality')return ['QC'];
   if(screen==='Packing')return ['PACK'];
-  if(screen==='Delivery')return identity?.roles.includes('SUPERADMIN')?['RUN','STOP','ARRIVE','FAIL','RETRY','POD']:identity?.roles.includes('DRIVER')?['ARRIVE','FAIL','POD']:identity?.roles.includes('DISPATCH')?['RUN','STOP','RETRY']:[];
+  if(screen==='Delivery')return identity?.roles.includes('SUPERADMIN')?['RUN','STOP','ARRIVE','FAIL','PARTIAL','RETRY','POD']:identity?.roles.includes('DRIVER')?['ARRIVE','FAIL','PARTIAL','POD']:identity?.roles.includes('DISPATCH')?['RUN','STOP','RETRY']:[];
   return [];
  }
  const ops=actionsForScreen();
