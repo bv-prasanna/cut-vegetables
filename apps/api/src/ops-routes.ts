@@ -69,7 +69,34 @@ export function createOperationsRoutes(pool:Pool){
    WHERE po.organization_id=$1 ORDER BY rl.received_at DESC LIMIT 200`,[c.get('organizationId')]);
   return c.json(q.rows);
  });
- app.get('/ops/stops',async c=>{
+  app.get('/ops/raw-lots/:id/traceability',async c=>{
+  if(!canAny(c.get('roles'),'inventory:read')&&!canAny(c.get('roles'),'qc:read')&&!canAny(c.get('roles'),'production:read'))
+   throw new BusinessFailure(403,'Permission denied');
+  const lotId=idParam(c);
+  const rows=await pool.query(`SELECT rl.id AS raw_lot_id,rl.supplier_lot,rl.received_grams,rl.usable_grams,rl.rejected_grams,rl.received_at,
+   v.name AS vegetable,s.name AS supplier,
+   pb.id AS batch_id,pb.state AS batch_state,pb.input_grams,pb.output_grams,pb.waste_grams,
+   o.id AS order_id,o.delivery_date::text AS delivery_date,o.state AS order_state,
+   buyer.name AS customer,k.name AS kitchen,
+   pu.id AS pack_unit_id,pu.label_code,pu.net_grams,pu.use_by,
+   ds.status AS delivery_status,dp.received_by,dp.received_at AS delivered_at
+   FROM raw_lots rl
+   JOIN purchase_orders po ON po.id=rl.purchase_id
+   JOIN suppliers s ON s.id=po.supplier_id
+   JOIN vegetables v ON v.id=rl.vegetable_id
+   LEFT JOIN production_batches pb ON pb.raw_lot_id=rl.id
+   LEFT JOIN orders o ON o.id=pb.order_id
+   LEFT JOIN organizations buyer ON buyer.id=o.organization_id
+   LEFT JOIN kitchens k ON k.id=o.kitchen_id
+   LEFT JOIN pack_units pu ON pu.batch_id=pb.id
+   LEFT JOIN delivery_stops ds ON ds.order_id=o.id
+   LEFT JOIN delivery_proofs dp ON dp.stop_id=ds.id
+   WHERE rl.id=$1 AND po.organization_id=$2
+   ORDER BY pb.started_at,pu.packed_at`,[lotId,c.get('organizationId')]);
+  if(!rows.rowCount)throw new BusinessFailure(404,'Raw lot not found in this organisation');
+  return c.json(rows.rows);
+ });
+app.get('/ops/stops',async c=>{
   if(!canAny(c.get('roles'),'delivery:read')&&!canAny(c.get('roles'),'delivery:assigned'))
    throw new BusinessFailure(403,'Permission denied');
   const driverOnly=!canAny(c.get('roles'),'delivery:read');
