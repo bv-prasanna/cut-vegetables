@@ -7,6 +7,7 @@ describe('order state invariants',()=>{
 });
 describe('production quality invariants',()=>{
  it('accepts balanced yield',()=>expect(validateBatchYield(10000,8000,2000)).toBe(true));
+ it('rejects unaccounted input weight',()=>expect(validateBatchYield(10000,8000,1500)).toBe(false));
  it.each([[100,101,0],[100,50,51],[0,0,0],[100,-1,0],[10,2,0.4]])('rejects invalid yield %s %s %s',(i,o,w)=>expect(validateBatchYield(i,o,w)).toBe(false));
  it('forbids dispatch without passed QC and label',()=>{expect(mayDispatchBatch('PACKED',true,true)).toBe(true);expect(mayDispatchBatch('PACKED',false,true)).toBe(false);expect(mayDispatchBatch('PACKED',true,false)).toBe(false);expect(mayDispatchBatch('QC_FAILED',true,true)).toBe(false);});
 });
