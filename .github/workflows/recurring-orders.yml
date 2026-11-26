@@ -32,7 +32,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - name: Validate scheduler configuration and derive delivery date
         id: target
         shell: bash
@@ -42,9 +41,15 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${DATABASE_URL}" ] || [ -z "${PRODUCER_ORG_ID}" ]; then
-            echo "::error::Configure FRESHPREP_DATABASE_URL and FRESHPREP_PRODUCER_ORG_ID repository secrets before enabling recurring generation."
+            if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+              echo "enabled=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Recurring order generation is paused until FRESHPREP_DATABASE_URL and FRESHPREP_PRODUCER_ORG_ID are configured."
+              exit 0
+            fi
+            echo "::error::Configure FRESHPREP_DATABASE_URL and FRESHPREP_PRODUCER_ORG_ID repository secrets before running manually."
             exit 1
           fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
           if [ -n "$DELIVERY_DATE_OVERRIDE" ]; then
             delivery_date="$DELIVERY_DATE_OVERRIDE"
           elif [ "$SCHEDULE_CRON" = "5 17 * * *" ]; then
@@ -59,8 +64,10 @@ jobs:
           echo "delivery_date=${delivery_date}" >> "$GITHUB_OUTPUT"
           echo "Target delivery date: ${delivery_date} (Asia/Kolkata)"
       - name: Install workspace dependencies
-        run: npm ci --include=dev --no-audit --no-fund
+        if: steps.target.outputs.enabled == 'true'
+        run: npm install --include=dev --no-audit --no-fund
       - name: Materialize due recurring orders
+        if: steps.target.outputs.enabled == 'true'
         env:
           DELIVERY_DATE: ${{ steps.target.outputs.delivery_date }}
         run: npm run recurrence:run --workspace @freshprep/api
