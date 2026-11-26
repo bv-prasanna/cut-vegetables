@@ -30,6 +30,7 @@ const operations:Record<Mutation,Operation>={
  BATCH:{title:'Start production batch',path:'/v1/ops/batches',method:'POST',eventType:'PRODUCTION_BATCH_STARTED',subjectType:'BATCH',fields:[{key:'orderId',title:'Select confirmed order'},{key:'variantId',title:'Select ordered cut and size'},{key:'rawLotId',title:'Select matching raw lot'},{key:'inputGrams',title:'Input grams',type:'number'}]},
  COMPLETE:{title:'Record batch output',path:'/v1/ops/batches/{id}/complete',method:'POST',eventType:'PRODUCTION_BATCH_COMPLETED',subjectType:'BATCH',fields:[{key:'id',title:'Select processing batch'},{key:'outputGrams',title:'Finished grams',type:'number'},{key:'wasteGrams',title:'Waste grams',type:'number'}]},
  QC:{title:'QC inspection',path:'/v1/ops/batches/{id}/qc',method:'POST',eventType:'QC_CHECK_RECORDED',subjectType:'QC_CHECK',fields:[{key:'id',title:'Batch UUID'},{key:'passed',title:'Passed? Enter true / false'},{key:'findings',title:'Inspection findings'},{key:'temperatureC',title:'Measured temperature °C',type:'number'}]},
+ REWORK:{title:'Return failed batch for rework',path:'/v1/ops/batches/{id}/rework',method:'POST',eventType:'PRODUCTION_BATCH_REWORK_REQUESTED',subjectType:'BATCH',fields:[{key:'id',title:'Select QC-failed batch'},{key:'note',title:'Corrective action / rework note'}]},
  PACK:{title:'Record labelled pack',path:'/v1/ops/batches/{id}/pack',method:'POST',eventType:'PACK_UNIT_CREATED',subjectType:'PACK_UNIT',fields:[{key:'id',title:'Select QC-approved batch'},{key:'netGrams',title:'Net pack grams',type:'number'},{key:'labelCode',title:'Unique printed label code'},{key:'useBy',title:'Use by (ISO with timezone)'}]},
  RUN:{title:'Create driver run',path:'/v1/ops/runs',method:'POST',eventType:'DELIVERY_RUN_CREATED',subjectType:'DELIVERY_RUN',fields:[{key:'slotId',title:'Select delivery slot'},{key:'deliveryDate',title:'Delivery date YYYY-MM-DD'},{key:'driverId',title:'Select driver'}]},
  STOP:{title:'Assign order to driver run',path:'/v1/ops/runs/{id}/stops',method:'POST',eventType:'DELIVERY_STOP_ASSIGNED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select delivery run'},{key:'orderId',title:'Select packed order'},{key:'stopNumber',title:'Stop number',type:'number'}]},
@@ -297,7 +298,7 @@ function AuthenticatedMobile(){
  }
  function actionsForScreen():Mutation[]{
   if(screen==='Procurement')return ['SUPPLIER','PURCHASE','RECEIVE'];
-  if(screen==='Cutting')return ['BATCH','COMPLETE'];
+  if(screen==='Cutting')return identity?.roles.includes('PRODUCTION_SUPERVISOR')||identity?.roles.includes('SUPERADMIN')?['BATCH','COMPLETE','REWORK']:['BATCH','COMPLETE'];
   if(screen==='Quality')return ['QC'];
   if(screen==='Packing')return ['PACK'];
   if(screen==='Delivery')return identity?.roles.includes('DRIVER')&&!identity.roles.includes('DISPATCH')&&!identity.roles.includes('SUPERADMIN')?['POD']:['RUN','STOP','POD'];
