@@ -35,7 +35,9 @@ const operations:Record<Mutation,Operation>={
  RUN:{title:'Create driver run',path:'/v1/ops/runs',method:'POST',eventType:'DELIVERY_RUN_CREATED',subjectType:'DELIVERY_RUN',fields:[{key:'slotId',title:'Select delivery slot'},{key:'deliveryDate',title:'Delivery date YYYY-MM-DD'},{key:'driverId',title:'Select driver'}]},
  STOP:{title:'Assign order to driver run',path:'/v1/ops/runs/{id}/stops',method:'POST',eventType:'DELIVERY_STOP_ASSIGNED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select delivery run'},{key:'orderId',title:'Select packed order'},{key:'stopNumber',title:'Stop number',type:'number'}]},
  ARRIVE:{title:'Mark arrival at customer',path:'/v1/ops/stops/{id}/arrive',method:'POST',eventType:'DELIVERY_STOP_ARRIVED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select pending assigned stop'},{key:'notes',title:'Arrival note'}]},
- POD:{title:'Confirm delivery handover',path:'/v1/ops/stops/{id}/complete',method:'POST',eventType:'DELIVERY_POD_CAPTURED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select assigned delivery stop'},{key:'receivedBy',title:'Receiver full name'},{key:'notes',title:'Handover notes'}]}
+ POD:{title:'Confirm delivery handover',path:'/v1/ops/stops/{id}/complete',method:'POST',eventType:'DELIVERY_POD_CAPTURED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select assigned delivery stop'},{key:'receivedBy',title:'Receiver full name'},{key:'notes',title:'Handover notes'}]},
+ FAIL:{title:'Record failed delivery',path:'/v1/ops/stops/{id}/exception',method:'POST',eventType:'DELIVERY_ATTEMPT_FAILED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select pending assigned stop'},{key:'reasonCode',title:'Failure reason'},{key:'notes',title:'What happened?'}]},
+ RETRY:{title:'Schedule delivery retry',path:'/v1/ops/stops/{id}/retry',method:'POST',eventType:'DELIVERY_RETRY_SCHEDULED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select failed delivery stop'},{key:'notes',title:'Redelivery note'}]}
 };
 const palette={green:'#175a3a',light:'#edf5ed',muted:'#748676'};
 const kg=(n:unknown)=>((Number(n)||0)/1000).toLocaleString('en-IN',{maximumFractionDigits:2})+' kg';
