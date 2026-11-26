@@ -2,8 +2,8 @@
 
 **Status date:** 27 November 2026  
 **Repository:** bv-prasanna/cut-vegetables  
-**Current main commit:** 1cb92f08b27368fddf0206498cf4a2b1be9bb9ae  
-**Latest CI run:** 45887541891 — 4/4 jobs passed  
+**Current main commit:** c026cbce995da19d9c0b2d62339ec97f94c94906  
+**Latest CI run:** 45892567540 — 4/4 jobs passed  
 **Release state:** private staging candidate only; customer UAT is not certified and production is not ready.
 
 ## What 98% means
@@ -32,7 +32,7 @@ The percentages below are engineering estimates of implemented functionality, no
 | Production and cutting | 90% | 80% | 85% | 90% | Final all-slot daily roll-up, physical yield capture, work allocation and exception recovery |
 | Quality control | 90% | 80% | 85% | 90% | Quarantine/rework policy, calibrated checks, physical hygiene/temperature UAT |
 | Packing and labels | 90% | 80% | 85% | 90% | Per-order/partial packing, label printing/scanning, expiry/handling policy |
-| Dispatch, delivery and POD | 90% | 80% | 85% | 90% | Route optimisation, failed/partial delivery, shortage/return flow, physical GPS/POD UAT |
+| Dispatch, delivery and POD | 90% | 83% | 88% | 92% | Partial-delivery resupply, route optimisation, shortage/return flow, physical GPS/POD UAT |
 | Audit and reporting | 75% | 70% | 60% | 75% | Complete event coverage, export/retention, finance/yield/complaint reports |
 | Marketing CMS (slides and announcements) | 75% | 75% | 0% | 80% | Edit workflow, audience/zone targeting, approval/publish separation |
 | Offers, coupons and loyalty | 70% | 65% | 55% | 80% | Expiry and breakage, loyalty redemption policy approval, legacy ledger conversion and promotion analytics |
@@ -61,6 +61,9 @@ The percentages below are engineering estimates of implemented functionality, no
 - Latest CI run 45259257726 passed 4/4 jobs: API/Web, PostgreSQL lifecycle/negative tests, Expo mobile, and Chromium browser UAT.
 - Notifications: new user-scoped inbox and category preferences, read/unread state, unread filtering, mark-all-read and tenant-safe recipient delivery. Transactional notifications are emitted for order confirmation, support case creation/status, verified delivery, loyalty awards, provisional invoices, receipts and approved credit notes. Web and mobile inboxes are available. Email, SMS and push providers are not connected; these remain explicit release gaps.
 - Latest CI run 45260866295 passed 4/4 jobs: API/Web, PostgreSQL migrations and lifecycle/negative tests, Expo mobile, and Chromium browser UAT.
+- QC recovery: production supervisors can return QC-failed batches to processing with a corrective-action note; previous QC checks remain in history. Production yield now requires exact input = output + waste reconciliation. Driver arrival is recorded before POD, with assigned-driver enforcement. Supplier raw-lot traceability now joins supplier, batch, QC/pack, customer order and delivery proof under producer-organisation scope.
+- Delivery exceptions: migration 0019 adds immutable per-attempt delivery history. Drivers can record FAILED or PARTIAL outcomes with a controlled reason, notes and delivered quantity; dispatch can retry only fully FAILED stops while preserving the earlier attempt. Partial deliveries are deliberately not auto-retried because outstanding-quantity/resupply policy must be resolved first. Web and mobile expose failed-delivery and dispatcher-retry actions; the API also accepts PARTIAL for a future explicit support/resupply UI.
+- Quality gate 45892567540 passed 4/4 jobs on commit c026cbce995da19d9c0b2d62339ec97f94c94906: API/Web typecheck, unit/negative tests and production build; PostgreSQL 16 migrations and real lifecycle; Expo mobile typecheck/tests; Chromium responsive browser UAT.
 - Refund workflow: supplier finance can create refund requests only for resolved support cases explicitly marked REFUND; amount is capped at paid invoice allocations less active/refunded requests and approved credit notes. Requests are idempotent and tenant-scoped, with audited REQUESTED → APPROVED → PROCESSING → REFUNDED/FAILED transitions, mandatory settlement reference/failure reason, and customer refund history/notifications on web and mobile. Manual recording only: no Razorpay/bank API is connected, so a REFUNDED status requires staff to enter an externally confirmed reference.
 - Latest quality gate 45887541891 passed 4/4 jobs (API/Web, PostgreSQL, Expo Mobile, Chromium) after correcting the admin-insights test to respect the 12-event recent-feed limit. The POD audit itself is independently asserted against PostgreSQL event_log.
 - Recurring-order workflow was repaired to run without a nonexistent npm lockfile and to avoid failing scheduled runs while production secrets are absent. Scheduled generation remains inactive until FRESHPREP_DATABASE_URL and FRESHPREP_PRODUCER_ORG_ID are configured; a manual run without those secrets fails clearly.
