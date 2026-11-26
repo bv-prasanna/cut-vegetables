@@ -34,6 +34,7 @@ const operations:Record<Mutation,Operation>={
  PACK:{title:'Record labelled pack',path:'/v1/ops/batches/{id}/pack',method:'POST',eventType:'PACK_UNIT_CREATED',subjectType:'PACK_UNIT',fields:[{key:'id',title:'Select QC-approved batch'},{key:'netGrams',title:'Net pack grams',type:'number'},{key:'labelCode',title:'Unique printed label code'},{key:'useBy',title:'Use by (ISO with timezone)'}]},
  RUN:{title:'Create driver run',path:'/v1/ops/runs',method:'POST',eventType:'DELIVERY_RUN_CREATED',subjectType:'DELIVERY_RUN',fields:[{key:'slotId',title:'Select delivery slot'},{key:'deliveryDate',title:'Delivery date YYYY-MM-DD'},{key:'driverId',title:'Select driver'}]},
  STOP:{title:'Assign order to driver run',path:'/v1/ops/runs/{id}/stops',method:'POST',eventType:'DELIVERY_STOP_ASSIGNED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select delivery run'},{key:'orderId',title:'Select packed order'},{key:'stopNumber',title:'Stop number',type:'number'}]},
+ ARRIVE:{title:'Mark arrival at customer',path:'/v1/ops/stops/{id}/arrive',method:'POST',eventType:'DELIVERY_STOP_ARRIVED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select pending assigned stop'},{key:'notes',title:'Arrival note'}]},
  POD:{title:'Confirm delivery handover',path:'/v1/ops/stops/{id}/complete',method:'POST',eventType:'DELIVERY_POD_CAPTURED',subjectType:'DELIVERY_STOP',fields:[{key:'id',title:'Select assigned delivery stop'},{key:'receivedBy',title:'Receiver full name'},{key:'notes',title:'Handover notes'}]}
 };
 const palette={green:'#175a3a',light:'#edf5ed',muted:'#748676'};
@@ -301,7 +302,7 @@ function AuthenticatedMobile(){
   if(screen==='Cutting')return identity?.roles.includes('PRODUCTION_SUPERVISOR')||identity?.roles.includes('SUPERADMIN')?['BATCH','COMPLETE','REWORK']:['BATCH','COMPLETE'];
   if(screen==='Quality')return ['QC'];
   if(screen==='Packing')return ['PACK'];
-  if(screen==='Delivery')return identity?.roles.includes('DRIVER')&&!identity.roles.includes('DISPATCH')&&!identity.roles.includes('SUPERADMIN')?['POD']:['RUN','STOP','POD'];
+  if(screen==='Delivery')return identity?.roles.includes('SUPERADMIN')?['RUN','STOP','ARRIVE','POD']:identity?.roles.includes('DRIVER')?['ARRIVE','POD']:identity?.roles.includes('DISPATCH')?['RUN','STOP']:[];
   return [];
  }
  const ops=actionsForScreen();
