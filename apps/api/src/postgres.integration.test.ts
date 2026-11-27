@@ -418,7 +418,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   const buyerAttemptHistory=await request('/v1/delivery/orders/'+orderId+'/attempts','GET',undefined,customerToken);
   expect(buyerAttemptHistory.status).toBe(200);
   expect(await buyerAttemptHistory.json()).toEqual(expect.arrayContaining([expect.objectContaining({
-   attempt_number:1,outcome:'FAILED',reason_code:'CUSTOMER_UNAVAILABLE',delivered_grams:0
+   attempt_number:1,outcome:'FAILED',reason_code:'CUSTOMER_UNAVAILABLE',delivered_grams:'0'
   })]));
   const unrelatedOrderHistory=await request('/v1/delivery/orders/11111111-1111-4111-8111-111111111111/attempts','GET',undefined,customerToken);
   expect(unrelatedOrderHistory.status).toBe(404);
@@ -549,7 +549,7 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   const stacked=await request('/v1/orders','POST',{kitchenId,slotId,deliveryDate,idempotencyKey:'integration-loyalty-stacking-blocked-0001',items:[{variantId,grams}],promotionCode:'CI10',loyaltyPoints:1,event},customerToken);
   expect(stacked.status).toBe(409);
   const redemptionOrder=await request('/v1/orders','POST',{kitchenId,slotId,deliveryDate,idempotencyKey:'integration-loyalty-redeem-order-0001',items:[{variantId,grams}],loyaltyPoints:1,event},customerToken);
-  expect(redemptionOrder.status).toBe(201);
+  expect(redemptionOrder.status,await redemptionOrder.clone().text()).toBe(201);
   const redemptionOrderId=(await redemptionOrder.json() as {id:string}).id;
   const redemptionSnapshot=await pool.query<{discount_paise:string;pricing_snapshot:{loyaltyPointsRedeemed:number;loyaltyDiscountPaise:number}}>('SELECT discount_paise,pricing_snapshot FROM orders WHERE id=$1',[redemptionOrderId]);
   expect(Number(redemptionSnapshot.rows[0].discount_paise)).toBeGreaterThan(0);
