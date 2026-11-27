@@ -415,6 +415,13 @@ suite('real PostgreSQL UAT and negative flows',()=>{
   },actor('DRIVER'));
   expect(failedAttempt.status).toBe(201);
   expect(await failedAttempt.json()).toMatchObject({stopId,attemptNumber:1,outcome:'FAILED',orderState:'EXCEPTION'});
+  const buyerAttemptHistory=await request('/v1/delivery/orders/'+orderId+'/attempts','GET',undefined,customerToken);
+  expect(buyerAttemptHistory.status).toBe(200);
+  expect(await buyerAttemptHistory.json()).toEqual(expect.arrayContaining([expect.objectContaining({
+   attempt_number:1,outcome:'FAILED',reason_code:'CUSTOMER_UNAVAILABLE',delivered_grams:0
+  })]));
+  const unrelatedOrderHistory=await request('/v1/delivery/orders/11111111-1111-4111-8111-111111111111/attempts','GET',undefined,customerToken);
+  expect(unrelatedOrderHistory.status).toBe(404);
   const wrongRetry=await request('/v1/ops/stops/'+stopId+'/retry','POST',{
    notes:'Retry requested by unauthorised driver',event:ev('DELIVERY_RETRY_SCHEDULED','DELIVERY_STOP')
   },actor('DRIVER'));
