@@ -39,6 +39,26 @@ export function createDeliveryExceptionRoutes(pool:Pool){
   if(!rows.rowCount)throw new BusinessFailure(404,'No delivery attempts found for this stop');
   return c.json(rows.rows);
  });
+ app.get('/delivery/orders/:id/attempts',async c=>{
+  const buyerAccess=canAny(c.get('roles'),'orders:read');
+  const supplierAccess=canAny(c.get('roles'),'delivery:read');
+  if(!buyerAccess&&!supplierAccess)throw new BusinessFailure(403,'Permission denied');
+  const orderId=id(c),org=c.get('organizationId');
+  const accessible=await pool.query(`SELECT EXISTS(
+   SELECT 1 FROM orders o
+   WHERE o.id=$1 AND (($2::boolean AND o.organization_id=$3) OR ($4::boolean AND o.producer_organization_id=$3))
+  ) AS allowed`,[orderId,buyerAccess,supplierAccess,org]);
+  if(!accessible.rows[0].allowed)throw new BusinessFailure(404,'Order not found');
+  const rows=await pool.query(`SELECT da.id,da.attempt_number,da.outcome,da.reason_code,da.notes,
+    da.delivered_grams,da.occurred_at
+   FROM delivery_attempts da
+   JOIN delivery_stops ds ON ds.id=da.stop_id
+   JOIN delivery_runs dr ON dr.id=ds.run_id
+   JOIN orders o ON o.id=ds.order_id
+   WHERE o.id=$1 AND (($2::boolean AND o.organization_id=$3) OR ($4::boolean AND dr.producer_organization_id=$3))
+   ORDER BY da.attempt_number`,[orderId,buyerAccess,supplierAccess,org]);
+  return c.json(rows.rows);
+ });
  app.post('/ops/stops/:id/exception',async c=>{
   permission(c,'delivery:pod');
   const parsed=attemptSchema.safeParse(await c.req.json().catch(()=>null));
