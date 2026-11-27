@@ -46,7 +46,7 @@ export function createDeliveryExceptionRoutes(pool:Pool){
   const orderId=id(c),org=c.get('organizationId');
   const accessible=await pool.query(`SELECT EXISTS(
    SELECT 1 FROM orders o
-   WHERE o.id=$1 AND (($2::boolean AND o.organization_id=$3) OR ($4::boolean AND o.producer_organization_id=$3))
+   WHERE o.id=$1 AND (($2::boolean AND o.organization_id=$4) OR ($3::boolean AND o.producer_organization_id=$4))
   ) AS allowed`,[orderId,buyerAccess,supplierAccess,org]);
   if(!accessible.rows[0].allowed)throw new BusinessFailure(404,'Order not found');
   const rows=await pool.query(`SELECT da.id,da.attempt_number,da.outcome,da.reason_code,da.notes,
@@ -55,7 +55,7 @@ export function createDeliveryExceptionRoutes(pool:Pool){
    JOIN delivery_stops ds ON ds.id=da.stop_id
    JOIN delivery_runs dr ON dr.id=ds.run_id
    JOIN orders o ON o.id=ds.order_id
-   WHERE o.id=$1 AND (($2::boolean AND o.organization_id=$3) OR ($4::boolean AND dr.producer_organization_id=$3))
+   WHERE o.id=$1 AND (($2::boolean AND o.organization_id=$4) OR ($3::boolean AND dr.producer_organization_id=$4))
    ORDER BY da.attempt_number`,[orderId,buyerAccess,supplierAccess,org]);
   return c.json(rows.rows);
  });
