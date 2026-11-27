@@ -14,6 +14,7 @@ type Quote={id:string;quote_number:number|string;state:string;delivery_date:stri
 type Schedule={id:string;kitchen_id:string;slot_id:string;frequency:string;weekdays:number[];start_date:string;end_date:string|null;state:string};
 type SupportCase={id:string;case_number:number|string;order_id:string;category:string;description:string;requested_resolution?:string|null;state:string;resolution_note?:string|null;created_at:string};
 type CustomerRefund={id:string;refund_number:number;amount_paise:number;method:string;status:string;reason:string;external_reference:string|null;created_at:string;refunded_at:string|null};
+type DeliveryAttempt={id:string;attempt_number:number;outcome:'FAILED'|'PARTIAL';reason_code:string;notes:string;delivered_grams:string|number;occurred_at:string};
 type Props={token:string;base:string;roles:string[];onLogout:()=>void};
 const money=(p:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(p/100);
 const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -42,6 +43,7 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
  const canRequestQuote=canWrite;
  const [products,setProducts]=useState<Product[]>([]),[kitchens,setKitchens]=useState<Kitchen[]>([]),[slots,setSlots]=useState<Slot[]>([]);
  const [orders,setOrders]=useState<Order[]>([]),[schedules,setSchedules]=useState<Schedule[]>([]),[quotes,setQuotes]=useState<Quote[]>([]),[supportCases,setSupportCases]=useState<SupportCase[]>([]),[customerRefunds,setCustomerRefunds]=useState<CustomerRefund[]>([]);
+ const [deliveryAttempts,setDeliveryAttempts]=useState<Record<string,DeliveryAttempt[]>>({});
  const [supportOrder,setSupportOrder]=useState(''),[supportCategory,setSupportCategory]=useState('QUALITY'),[supportDescription,setSupportDescription]=useState(''),[supportResolution,setSupportResolution]=useState('');
  const [wallet,setWallet]=useState<{balancePoints:number;programActive:boolean;paisePerPoint:number|null;minimumRedeemPoints:number|null;maximumDiscountBps:number|null;entries:{entry_type:string;points_delta:number;note:string|null;created_at:string}[]}|null>(null);
  const [view,setView]=useState<'Order'|'Recurring'|'History'>('Order');
@@ -77,6 +79,15 @@ export default function CustomerOrderPortal({token,base,roles,onLogout}:Props){
   }catch(e){setError(e instanceof Error?e.message:'Unable to load ordering');}
   finally{setBusy(false);}
  },[call]);
+ useEffect(()=>{
+   if(view!=='History'||!orders.length){setDeliveryAttempts({});return;}
+   let active=true;
+   void Promise.all(orders.map(async order=>{
+    try{return [order.id,await call<DeliveryAttempt[]>('/v1/delivery/orders/'+encodeURIComponent(order.id)+'/attempts')] as const;}
+    catch{return [order.id,[]] as const;}
+   })).then(entries=>{if(active)setDeliveryAttempts(Object.fromEntries(entries));});
+   return()=>{active=false;};
+  },[view,orders,call]);
  useEffect(()=>{if(!kitchen){setWallet(null);return;}let active=true;void call<{balancePoints:number;programActive:boolean;paisePerPoint:number|null;minimumRedeemPoints:number|null;maximumDiscountBps:number|null;entries:{entry_type:string;points_delta:number;note:string|null;created_at:string}[]}>('/v1/loyalty/me?kitchenId='+encodeURIComponent(kitchen)).then(value=>{if(active)setWallet(value);}).catch(()=>{if(active)setWallet(null);});return()=>{active=false;};},[kitchen,call]);
  useEffect(()=>{void refresh();},[refresh]);
  useEffect(()=>{if(previousKitchen.current&&previousKitchen.current!==kitchen)setBasket({});previousKitchen.current=kitchen;},[kitchen]);
@@ -223,7 +234,7 @@ async function setScheduleState(s:Schedule,state:'ACTIVE'|'PAUSED'|'CANCELLED'){
  {status&&<div role="status" className="fp-customer-ok">{status}</div>}
  <nav className="fp-customer-tabs"><button className={view==='Order'?'active':''} onClick={()=>setView('Order')}>One-time order</button><button className={view==='Recurring'?'active':''} onClick={()=>setView('Recurring')}>Recurring supply</button><button className={view==='History'?'active':''} onClick={()=>setView('History')}>Orders & schedules</button></nav>
  {!canWrite&&<p className="fp-customer-info">Your role permits viewing orders but not creating or changing them.</p>}
- {view==='History'?<div className="fp-customer-history"><section><h3>Recent orders</h3>{orders.length?orders.map(o=><article key={o.id}><b>{o.id.slice(0,12)}</b><span>{o.delivery_date}</span><span>{o.state}</span>{canWrite&&o.state==='CONFIRMED'&&<button type="button" disabled={busy} onClick={()=>void cancelOrder(o)}>Cancel order</button>}</article>):<p>No orders yet.</p>}</section>
+ {view==='History'?<div className="fp-customer-history"><section><h3>Recent orders</h3>{orders.length?orders.map(o=><article key={o.id}><b>{o.id.slice(0,12)}</b><span>{o.delivery_date}</span><span>{o.state}</span>{canWrite&&o.state==='CONFIRMED'&&<button type="button" disabled={busy} onClick={()=>void cancelOrder(o)}>Cancel order</button>}{(deliveryAttempts[o.id]||[]).length>0&&<div className="fp-customer-delivery-attempts"><strong>Delivery updates</strong>{deliveryAttempts[o.id].map(attempt=><p key={attempt.id}><b>{attempt.outcome==='FAILED'?'Delivery attempt failed':'Partial delivery'}</b> · {attempt.reason_code.replaceAll('_',' ')} · {Number(attempt.delivered_grams).toLocaleString('en-IN')} g delivered<br/><small>{attempt.notes} · {new Date(attempt.occurred_at).toLocaleString('en-IN')}</small></p>)}</div>}</article>):<p>No orders yet.</p>}</section>
  <section><h3>Recurring schedules</h3>{schedules.length?schedules.map(s=><article key={s.id}><div><b>{s.frequency} · {s.state}</b><p>{s.start_date}{s.end_date?' – '+s.end_date:''}</p><small>{s.id}</small></div>{canWrite&&<div className="fp-customer-actions"><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,s.state==='ACTIVE'?'PAUSED':'ACTIVE')}>{s.state==='ACTIVE'?'Pause':'Resume'}</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void skipDate(s)}>Skip selected date</button><button disabled={busy||s.state==='CANCELLED'} onClick={()=>void setScheduleState(s,'CANCELLED')}>Cancel</button></div>}</article>):<p>No recurring schedules.</p>}</section><section className="fp-customer-quotes"><h3>Quote requests</h3>{quotes.length?quotes.map(q=><article key={q.id}><div><b>Quote #{q.quote_number} · {q.state}</b><p>Delivery {q.delivery_date} · Total {money(Number(q.total_paise))}</p>{q.note&&<small>{q.note}</small>}{q.valid_until&&<small>Valid until {new Date(q.valid_until).toLocaleString('en-IN')}</small>}{q.accepted_order_id&&<small>Order {q.accepted_order_id.slice(0,12)}</small>}</div>{q.state==='PROPOSED'&&canWrite&&<div className="fp-customer-actions"><button disabled={busy} onClick={()=>void acceptQuote(q)}>Accept quote</button><button disabled={busy} onClick={()=>void rejectQuote(q)}>Decline</button></div>}</article>):<p>No quote requests yet.</p>}</section><section className="fp-customer-refunds"><header><h3>Refund status</h3><span>{customerRefunds.length} requests</span></header>
   {customerRefunds.map(item=><article key={item.id}><div><strong>Refund #{item.refund_number}</strong><small>{money(item.amount_paise)} · {item.method} · {new Date(item.created_at).toLocaleDateString('en-IN')}</small><p>{item.reason}</p>{item.external_reference&&<small>Reference: {item.external_reference}</small>}</div><span className={'fp-customer-refund-state '+item.status.toLowerCase()}>{item.status.replaceAll('_',' ')}</span></article>)}
   {!customerRefunds.length&&<p>No refund requests yet.</p>}
