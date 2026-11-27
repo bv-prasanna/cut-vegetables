@@ -16,6 +16,7 @@ type Fields=Record<string,string>;
 type Recurrence={id:string;state:string;frequency:string;start_date:string;weekdays:number[];slot_id:string};
 type SupportCase={id:string;case_number:number|string;order_id:string;category:string;description:string;requested_resolution:string|null;state:string;resolution_note:string|null;created_at:string};
 type SupportOrder={id:string;delivery_date:string;state:string};
+type DeliveryAttempt={id:string;attempt_number:number;outcome:'FAILED'|'PARTIAL';reason_code:string;notes:string;delivered_grams:string|number;occurred_at:string};
 type MobileWallet={balancePoints:number;programActive:boolean;paisePerPoint:number|null;minimumRedeemPoints:number|null;maximumDiscountBps:number|null;entries:{entry_type:string;points_delta:number;note:string|null;created_at:string}[]};
 type PromotionPreview={code:string;name:string;discountType:'FIXED_PAISE'|'PERCENT_BPS';discountValue:number;maxDiscountPaise:number|null;minimumSubtotalPaise:number};
 type Mutation=ActionMutation;
@@ -99,6 +100,7 @@ function AuthenticatedMobile(){
  const [weekdays,setWeekdays]=useState<number[]>([1,2,3,4,5,6]);
  const [operation,setOperation]=useState<Mutation>('BATCH'),[fields,setFields]=useState<Fields>({});
  const [supportCases,setSupportCases]=useState<SupportCase[]>([]),[supportOrders,setSupportOrders]=useState<SupportOrder[]>([]);
+  const [deliveryAttemptHistory,setDeliveryAttemptHistory]=useState<Record<string,DeliveryAttempt[]>>({});
  const [supportOrderId,setSupportOrderId]=useState(''),[supportCategory,setSupportCategory]=useState('SHORTAGE');
  const [supportDescription,setSupportDescription]=useState(''),[supportResolution,setSupportResolution]=useState('');
  const [mobileWallet,setMobileWallet]=useState<MobileWallet|null>(null),[loyaltyPointsToRedeem,setLoyaltyPointsToRedeem]=useState('');
@@ -184,6 +186,17 @@ function AuthenticatedMobile(){
   return()=>{active=false;};
  },[screen,kitchenId,call]);
  useEffect(()=>{void refresh();},[refresh]);
+ useEffect(()=>{
+   if(screen!=='Orders'||!data.length){setDeliveryAttemptHistory({});return;}
+   let active=true;
+   const orderIds=data.map(row=>row&&typeof row==='object'&&'id' in row?String((row as {id:unknown}).id):'').filter(Boolean);
+   void Promise.all(orderIds.map(async orderId=>{
+    try{return [orderId,await call<DeliveryAttempt[]>('/v1/delivery/orders/'+encodeURIComponent(orderId)+'/attempts')] as const;}
+    catch{return [orderId,[]] as const;}
+   })).then(entries=>{if(active)setDeliveryAttemptHistory(Object.fromEntries(entries));});
+   return()=>{active=false;};
+  },[screen,data,call]);
+ 
  const selected=Object.entries(cart).filter(([,g])=>g>0).map(([variantId,grams])=>({variantId,grams}));
  const filteredCuts=useMemo(()=>searchCuts(catalogue,catalogSearch),[catalogue,catalogSearch]);
  const cartInfo=useMemo(()=>basketTotals(cart,catalogue),[cart,catalogue]);
@@ -425,6 +438,18 @@ function AuthenticatedMobile(){
    </View>
   </>}
 
+  {screen==='Orders'&&Object.entries(deliveryAttemptHistory).some(([,attempts])=>attempts.length>0)&&<View style={styles.card}>
+    <Text style={styles.heading}>Delivery updates</Text>
+    {Object.entries(deliveryAttemptHistory).filter(([,attempts])=>attempts.length>0).map(([orderId,attempts])=><View key={orderId} style={styles.detail}>
+     <View style={{flex:1}}><Text style={styles.item}>Order {orderId.slice(0,8)}</Text>
+      {attempts.map(attempt=><View key={attempt.id} style={{marginTop:8}}>
+       <Text style={styles.value}>{attempt.outcome==='FAILED'?'Delivery attempt failed':'Partial delivery'} · {attempt.reason_code.replaceAll('_',' ')}</Text>
+       <Text style={styles.muted}>{Number(attempt.delivered_grams).toLocaleString('en-IN')} g delivered · {attempt.notes}</Text>
+       <Text style={styles.muted}>{new Date(attempt.occurred_at).toLocaleString('en-IN')}</Text>
+      </View>)}
+     </View>
+    </View>)}
+   </View>}
   {screen!=='Home'&&screen!=='Catalogue'&&screen!=='Place Order'&&screen!=='Recurring'&&<WorkQueueCards screen={screen} rows={data} loading={loading}/>}
  
   {ops.length>0&&<View style={styles.card}><Text style={styles.heading}>Record verified operation</Text>
